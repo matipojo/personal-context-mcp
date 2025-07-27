@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import path from 'path';
 import { 
   EnvironmentConfigSchema,
@@ -31,7 +30,7 @@ import { OTPManager, type OTPVerificationResult } from './managers/OTPManager.js
 import { EncryptionManager } from './managers/EncryptionManager.js';
 
 class PersonalInfoMCPServer {
-  private server: Server;
+  private server: McpServer;
   private permissionManager!: PermissionManager;
   private fileManager!: FileManager;
   private otpManager!: OTPManager;
@@ -40,12 +39,10 @@ class PersonalInfoMCPServer {
   private currentOTPSession: { token: string; expires: number; userId?: string } | null = null;
 
   constructor() {
-    this.server = new Server(
-      {
+    this.server = new McpServer({
         name: 'personal-info-mcp-server',
         version: '1.0.0',
-      }
-    );
+    });
 
     // Parse data directory from command line arguments, fall back to environment variable
     const cmdDataDir = parseDataDirectory(process.argv);
@@ -81,370 +78,156 @@ class PersonalInfoMCPServer {
       PERSONAL_INFO_ENCRYPTION_KEY: process.env.PERSONAL_INFO_ENCRYPTION_KEY
     });
 
-    this.setupHandlers();
+    this.setupToolsUsingModernApproach();
   }
 
-  private setupHandlers(): void {
-    // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      return {
-        tools: [
-          {
-            name: ToolNames.SAVE_PERSONAL_INFO,
-            description: 'Save or update personal information. You should save things on every time when user enters new personal information that not saved yet.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                category: { type: 'string' },
-                subcategory: { type: 'string' },
-                content: { type: 'string' },
-                scope: { 
-                  type: 'string',
-                  description: 'Scope for the information (public, contact, location, personal, memories, sensitive, or custom scope)'
-                },
-                tags: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'Optional tags for categorization'
-                }
-              },
-              required: ['category', 'content', 'scope']
-            }
-          },
-          {
-            name: ToolNames.UPDATE_PERSONAL_INFO,
-            description: 'Update existing personal information. Only updates specified fields, leaving others unchanged.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                category: { 
-                  type: 'string',
-                  description: 'Category of information to update'
-                },
-                subcategory: { 
-                  type: 'string',
-                  description: 'Optional subcategory filter'
-                },
-                content: { 
-                  type: 'string',
-                  description: 'New content (optional - if not provided, content remains unchanged)'
-                },
-                scope: { 
-                  type: 'string',
-                  description: 'New scope for the information (optional - if not provided, scope remains unchanged)'
-                },
-                tags: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'New tags (optional - if not provided, tags remain unchanged)'
-                }
-              },
-              required: ['category']
-            }
-          },
-          {
-            name: ToolNames.LIST_AVAILABLE_PERSONAL_INFO,
-            description: `List all available personal information within current scope. use it when the user needs personal information, 
-            for example, when the user asks writing a message, or on shopping and the address is needed, .`,
-            inputSchema: {
-              type: 'object',
-              properties: {
-                scope_filter: {
-                  type: 'string',
-                  description: 'Optional scope filter to narrow results'
-                }
-              }
-            }
-          },
-          {
-            name: ToolNames.DELETE_PERSONAL_INFO,
-            description: 'Delete specific personal information',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                category: { type: 'string' },
-                subcategory: { type: 'string' }
-              },
-              required: ['category']
-            }
-          },
-          {
-            name: ToolNames.SEARCH_PERSONAL_MEMORIES,
-            description: 'Search through memories and experiences',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: { type: 'string', description: 'Search query' },
-                tags: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: 'Filter by tags'
-                },
-                date_range: {
-                  type: 'object',
-                  properties: {
-                    start: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
-                    end: { type: 'string', description: 'End date (YYYY-MM-DD)' }
-                  },
-                  description: 'Filter by date range'
-                }
-              },
-              required: ['query']
-            }
-          },
-          {
-            name: ToolNames.CREATE_PERSONAL_SCOPE,
-            description: 'Create a new custom scope for organizing personal information',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                scope_name: {
-                  type: 'string',
-                  description: 'Name of the new scope (lowercase, alphanumeric, underscores, hyphens)'
-                },
-                description: {
-                  type: 'string',
-                  description: 'Description of what this scope contains'
-                },
-                parent_scope: {
-                  type: 'string',
-                  description: 'Optional parent scope for inheritance'
-                },
-                sensitivity_level: {
-                  type: 'integer',
-                  minimum: 1,
-                  maximum: 10,
-                  description: 'Sensitivity level (1=public, 10=highly sensitive)'
-                }
-              },
-              required: ['scope_name', 'description']
-            }
-          },
-          {
-            name: ToolNames.LIST_PERSONAL_SCOPES,
-            description: 'List all available scopes (built-in and custom) with their details',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                include_custom_only: {
-                  type: 'boolean',
-                  description: 'If true, only show custom scopes'
-                },
-                show_hierarchy: {
-                  type: 'boolean',
-                  description: 'If true, show scope inheritance hierarchy'
-                }
-              }
-            }
-          },
-          {
-            name: ToolNames.BATCH_GET_PERSONAL_INFO,
-            description: `Retrieve multiple categories of personal information in a single request.
-            Retrieve personal information based on category and current scope permissions, 
-            you can get a wide range of information, personal, pets, family, friends, work, etc and even more.
-            You must list once all the categories with the list_available_personal_info tool before using this tool to understand what you can get.`,
-            inputSchema: {
-              type: 'object',
-              properties: {
-                has_list_available_personal_info: {
-                  type: 'boolean',
-                  description: 'If true, you already listed all the categories with the list_available_personal_info tool'
-                },
-                requests: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      category: {
-                        type: 'string',
-                        description: 'Category of information to retrieve (e.g., "name","phone", "address", "hobbies", "pets", "family", "friends", "work")'
-                      },
-                      subcategory: {
-                        type: 'string',
-                        description: 'Optional subcategory filter'
-                      }
-                    },
-                    required: ['category']
-                  },
-                  description: 'Array of requests for different categories/subcategories'
-                }
-              },
-              required: ['requests']
-            }
-          },
-          {
-            name: ToolNames.BATCH_SAVE_PERSONAL_INFO,
-            description: 'Save multiple pieces of personal information in a single request. More efficient than making multiple individual save requests.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                items: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      category: { type: 'string' },
-                      subcategory: { type: 'string' },
-                      content: { type: 'string' },
-                      scope: { 
-                        type: 'string',
-                        description: 'Scope for the information (public, contact, location, personal, memories, sensitive, or custom scope)'
-                      },
-                      tags: {
-                        type: 'array',
-                        items: { type: 'string' },
-                        description: 'Optional tags for categorization'
-                      }
-                    },
-                    required: ['category', 'content', 'scope']
-                  },
-                  description: 'Array of personal information items to save'
-                }
-              },
-              required: ['items']
-            }
-          },
-          {
-            name: ToolNames.SETUP_OTP,
-            description: 'Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code and backup codes.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                issuer: {
-                  type: 'string',
-                  description: 'Service name (defaults to "Personal MCP Server")'
-                },
-                label: {
-                  type: 'string',
-                  description: 'Account label (defaults to "Personal Data Access")'
-                },
-                digits: {
-                  type: 'integer',
-                  minimum: 4,
-                  maximum: 8,
-                  description: 'Number of digits in OTP tokens (default: 6)'
-                },
-                period: {
-                  type: 'integer',
-                  minimum: 15,
-                  maximum: 300,
-                  description: 'Token validity period in seconds (default: 30)'
-                }
-              }
-            }
-          },
-          {
-            name: ToolNames.VERIFY_OTP,
-            description: 'Verify an OTP token to access encrypted personal data. Required before reading encrypted information.',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                token: {
-                  type: 'string',
-                  description: 'OTP token from authenticator app or backup code'
-                },
-                useBackupCode: {
-                  type: 'boolean',
-                  description: 'Set to true if using a backup code instead of OTP token'
-                },
-                userId: {
-                  type: 'string',
-                  description: 'Optional user identifier for multi-user scenarios'
-                }
-              },
-              required: ['token']
-            }
-          },
-          {
-            name: ToolNames.OTP_STATUS,
-            description: `Check the current OTP configuration status and whether OTP verification is required. 
-            Don't continue to use any other tools until you get the status of the OTP.`,
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
-          },
-          {
-            name: ToolNames.DISABLE_OTP,
-            description: 'Disable OTP authentication and encryption for personal data.',
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
-          },
-          {
-            name: ToolNames.REGENERATE_BACKUP_CODES,
-            description: 'Generate new backup codes for emergency access. Previous backup codes will be invalidated.',
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
-          },
-          {
-            name: ToolNames.OTP_DEBUG,
-            description: 'Debug OTP issues by showing current expected tokens and configuration. Use this when OTP verification fails.',
-            inputSchema: {
-              type: 'object',
-              properties: {}
-            }
-          }
-        ]
-      };
+    // Modern MCP tool registration using server.tool()
+  private setupToolsUsingModernApproach(): void {
+    // Save Personal Information Tool
+    this.server.registerTool('save_personal_info', {
+      title: "Save Personal Information",
+      description: "Save or update personal information. You should save things on every time when user enters new personal information that not saved yet.",
+      inputSchema: SavePersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleSavePersonalInfo(args);
     });
 
-    // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
-
-      try {
-        switch (name) {
-          case ToolNames.GET_PERSONAL_INFO:
-            return await this.handleGetPersonalInfo(args);
-          case ToolNames.SAVE_PERSONAL_INFO:
-            return await this.handleSavePersonalInfo(args);
-          case ToolNames.UPDATE_PERSONAL_INFO:
-            return await this.handleUpdatePersonalInfo(args);
-          case ToolNames.LIST_AVAILABLE_PERSONAL_INFO:
-            return await this.handleListAvailableInfo(args);
-          case ToolNames.DELETE_PERSONAL_INFO:
-            return await this.handleDeletePersonalInfo(args);
-          case ToolNames.SEARCH_PERSONAL_MEMORIES:
-            return await this.handleSearchMemories(args);
-          case ToolNames.CREATE_PERSONAL_SCOPE:
-            return await this.handleCreateScope(args);
-          case ToolNames.LIST_PERSONAL_SCOPES:
-            return await this.handleListScopes(args);
-          case ToolNames.BATCH_GET_PERSONAL_INFO:
-            return await this.handleBatchGetPersonalInfo(args);
-          case ToolNames.BATCH_SAVE_PERSONAL_INFO:
-            return await this.handleBatchSavePersonalInfo(args);
-          case ToolNames.SETUP_OTP:
-            return await this.handleSetupOTP(args);
-          case ToolNames.VERIFY_OTP:
-            return await this.handleVerifyOTP(args);
-          case ToolNames.OTP_STATUS:
-            return await this.handleOTPStatus(args);
-          case ToolNames.DISABLE_OTP:
-            return await this.handleDisableOTP(args);
-          case ToolNames.REGENERATE_BACKUP_CODES:
-            return await this.handleRegenerateBackupCodes(args);
-          case ToolNames.OTP_DEBUG:
-            return await this.handleOTPDebug(args);
-          default:
-            throw new Error(`Unknown tool: ${name}`);
-        }
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Error: ${errorMessage}`
-            }
-          ]
-        };
-      }
+    // Update Personal Information Tool
+    this.server.registerTool('update_personal_info', {
+      title: "Update Personal Information",
+      description: "Update existing personal information. Only updates specified fields, leaving others unchanged.",
+      inputSchema: UpdatePersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleUpdatePersonalInfo(args);
     });
+
+    // List Available Personal Information Tool
+    this.server.registerTool('list_available_personal_info', {
+      title: "List Available Personal Information",
+      description: "List all available personal information within current scope. use it when the user needs personal information, for example, when the user asks writing a message, or on shopping and the address is needed, .",
+      inputSchema: ListAvailableInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleListAvailableInfo(args);
+    });
+
+    // Get Personal Information Tool
+    this.server.registerTool('get_personal_info', {
+      title: "Get Personal Information",
+      description: "Retrieve personal information based on category and current scope permissions, you can get a wide range of information, personal, pets, family, friends, work, etc and even more. You must list once all the categories with the list_available_personal_info tool before using this tool to understand what you can get.",
+      inputSchema: GetPersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleGetPersonalInfo(args);
+    });
+
+    // Delete Personal Information Tool
+    this.server.registerTool('delete_personal_info', {
+      title: "Delete Personal Information",
+      description: "Delete specific personal information",
+      inputSchema: DeletePersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleDeletePersonalInfo(args);
+    });
+
+    // Search Personal Memories Tool
+    this.server.registerTool('search_personal_memories', {
+      title: "Search Personal Memories",
+      description: "Search through memories and experiences",
+      inputSchema: SearchMemoriesInputSchema.shape
+    }, async (args) => {
+      return this.handleSearchMemories(args);
+    });
+
+    // Create Personal Scope Tool
+    this.server.registerTool('create_personal_scope', {
+      title: "Create Personal Scope",
+      description: "Create a new custom scope for organizing personal information",
+      inputSchema: CreateScopeInputSchema.shape
+    }, async (args) => {
+      return this.handleCreateScope(args);
+    });
+
+    // List Personal Scopes Tool
+    this.server.registerTool('list_personal_scopes', {
+      title: "List Personal Scopes",
+      description: "List all available scopes (built-in and custom) with their details",
+      inputSchema: ListScopesInputSchema.shape
+    }, async (args) => {
+      return this.handleListScopes(args);
+    });
+
+    // Batch Get Personal Information Tool
+    this.server.registerTool('batch_get_personal_info', {
+      title: "Batch Get Personal Information",
+      description: "Retrieve multiple categories of personal information in a single request. Retrieve personal information based on category and current scope permissions, you can get a wide range of information, personal, pets, family, friends, work, etc and even more. You must list once all the categories with the list_available_personal_info tool before using this tool to understand what you can get.",
+      inputSchema: BatchGetPersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleBatchGetPersonalInfo(args);
+    });
+
+    // Batch Save Personal Information Tool
+    this.server.registerTool('batch_save_personal_info', {
+      title: "Batch Save Personal Information",
+      description: "Save multiple pieces of personal information in a single request. More efficient than making multiple individual save requests.",
+      inputSchema: BatchSavePersonalInfoInputSchema.shape
+    }, async (args) => {
+      return this.handleBatchSavePersonalInfo(args);
+    });
+
+    // Setup OTP Tool
+    this.server.registerTool('setup_otp', {
+      title: "Setup OTP",
+      description: "Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code and backup codes.",
+      inputSchema: SetupOTPInputSchema.shape
+    }, async (args) => {
+      return this.handleSetupOTP(args);
+    });
+
+    // Verify OTP Tool
+    this.server.registerTool('verify_otp', {
+      title: "Verify OTP",
+      description: "Verify an OTP token to access encrypted personal data. Required before reading encrypted information.",
+      inputSchema: VerifyOTPInputSchema.shape
+    }, async (args) => {
+      return this.handleVerifyOTP(args);
+    });
+
+    // OTP Status Tool
+    this.server.registerTool('otp_status', {
+      title: "OTP Status",
+      description: "Check the current OTP configuration status and whether OTP verification is required. Don't continue to use any other tools until you get the status of the OTP.",
+      inputSchema: OTPStatusInputSchema.shape
+    }, async (args) => {
+      return this.handleOTPStatus(args);
+    });
+
+    // Disable OTP Tool
+    this.server.registerTool('disable_otp', {
+      title: "Disable OTP",
+      description: "Disable OTP authentication and encryption for personal data.",
+      inputSchema: OTPStatusInputSchema.shape
+    }, async (args) => {
+      return this.handleDisableOTP(args);
+    });
+
+    // Regenerate Backup Codes Tool
+    this.server.registerTool('regenerate_backup_codes', {
+      title: "Regenerate Backup Codes",
+      description: "Generate new backup codes for emergency access. Previous backup codes will be invalidated.",
+      inputSchema: RegenerateBackupCodesInputSchema.shape
+    }, async (args) => {
+      return this.handleRegenerateBackupCodes(args);
+    });
+
+    // OTP Debug Tool
+    this.server.registerTool('otp_debug', {
+      title: "OTP Debug",
+      description: "Debug OTP issues by showing current expected tokens and configuration. Use this when OTP verification fails.",
+      inputSchema: OTPDebugInputSchema.shape
+    }, async (args) => {
+      return this.handleOTPDebug(args);
+    });
+
+    console.error('✅ All 16 Modern MCP tools successfully registered!');
   }
 
   private async handleGetPersonalInfo(args: unknown) {
@@ -468,7 +251,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `No ${input.category} information found in accessible scopes.`
           }
         ]
@@ -489,7 +272,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: result
         }
       ]
@@ -543,7 +326,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `Successfully ${isUpdate ? 'updated' : 'created'} ${input.category}${input.subcategory ? ` (${input.subcategory})` : ''} in scope '${input.scope}'.`
         }
       ]
@@ -608,7 +391,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `Successfully updated ${input.category}${input.subcategory ? ` (${input.subcategory})` : ''} in scope '${targetScope}'.`
         }
       ]
@@ -633,7 +416,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: 'No personal information found in accessible scopes.'
           }
         ]
@@ -668,7 +451,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: result
         }
       ]
@@ -711,7 +494,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `Successfully deleted ${deletedCount} ${input.category} file(s).`
         }
       ]
@@ -736,7 +519,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `No memories found matching query: "${input.query}"`
           }
         ]
@@ -758,7 +541,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: result
         }
       ]
@@ -780,7 +563,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: `Successfully created custom scope '${input.scope_name}' with sensitivity level ${input.sensitivity_level}.`
         }
       ]
@@ -850,7 +633,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: result
         }
       ]
@@ -939,7 +722,7 @@ class PersonalInfoMCPServer {
     return {
       content: [
         {
-          type: 'text',
+          type: 'text' as const,
           text: result
         }
       ]
@@ -997,7 +780,7 @@ class PersonalInfoMCPServer {
           await this.fileManager.createBackup(filePath, this.config.PERSONAL_INFO_BACKUP_DIR);
         }
 
-        const existingFile = isUpdate ? await this.fileManager.readMarkdownFile(filePath) : null;
+        const existingFile = isUpdate ? await this.fileManager.readMarkdownFile(filePath, encryptionOptions) : null;
 
         const fileData = {
           frontmatter: {
@@ -1070,8 +853,8 @@ class PersonalInfoMCPServer {
 
     return {
       content: [
-        {
-          type: 'text',
+        { 
+          type: 'text' as const,
           text: result
         }
       ]
@@ -1080,7 +863,7 @@ class PersonalInfoMCPServer {
 
   // Helper method to get decryption options from current OTP session
   private getDecryptionOptions(): any {
-    // If encryption is enabled, enforce OTP requirements
+    // If encryption is enabled, enforce OTP requirements for ACCESS CONTROL
     if (this.encryptionManager.isEnabled()) {
       // If OTP is not enabled but encryption is, require OTP setup first
       if (!this.otpManager.isEnabled()) {
@@ -1092,14 +875,17 @@ class PersonalInfoMCPServer {
         throw new Error('🔒 OTP verification required. Please use verify_otp tool first to access encrypted data.');
       }
 
-      console.error('🔓 Using OTP session for decryption:', {
+      console.error('🔓 Using OTP session for access control:', {
         hasToken: !!this.currentOTPSession.token,
         expires: new Date(this.currentOTPSession.expires).toISOString(),
         userId: this.currentOTPSession.userId
       });
 
+      // FIXED: Use stable encryption key without time-based OTP tokens
+      // OTP is only used for access control, not encryption key derivation
       return {
         secret: this.config.PERSONAL_INFO_ENCRYPTION_KEY || 'default-secret',
+        // Note: otpToken is still passed for legacy file compatibility but not used in new encryption
         otpToken: this.currentOTPSession.token,
         userId: this.currentOTPSession.userId
       };
@@ -1131,19 +917,12 @@ class PersonalInfoMCPServer {
       response += 'Your One-Time Password authentication has been successfully configured.\n\n';
       response += '## 📱 Set up your Authenticator App\n\n';
       response += 'Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)\n\n';
-      response += `### QR Code Image\n\n`;
-      response += `![OTP QR Code](${result.qrCodeDataURL})\n\n`;
-      response += `**📁 QR Code Files Saved:**\n`;
-      response += `- PNG Image: \`data/.security/qr-codes/otp-qrcode.png\`\n`;
-      response += `- SVG Image: \`data/.security/qr-codes/otp-qrcode.svg\`\n`;
-      response += `- URI Text: \`data/.security/qr-codes/otp-uri.txt\`\n\n`;
-      response += `### Manual Entry (if QR code doesn't work)\n\n`;
       response += `**Secret Key:** \`${result.secret}\`\n`;
       response += `**URI:** \`${result.qrCodeUri}\`\n\n`;
       response += '## 🆘 Emergency Backup Codes\n\n';
       response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
       
-      result.backupCodes.forEach((code, index) => {
+      result.backupCodes.forEach((code: string, index: number) => {
         response += `${index + 1}. \`${code}\`\n`;
       });
       
@@ -1160,7 +939,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: response
           }
         ]
@@ -1169,7 +948,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to set up OTP: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
@@ -1185,7 +964,7 @@ class PersonalInfoMCPServer {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: '❌ OTP is not enabled. Use the `setup_otp` tool first.'
             }
           ]
@@ -1224,7 +1003,7 @@ class PersonalInfoMCPServer {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: response
             }
           ]
@@ -1233,7 +1012,7 @@ class PersonalInfoMCPServer {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `❌ Invalid OTP token. Please check your authenticator app and try again.`
             }
           ]
@@ -1243,7 +1022,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to verify OTP: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
@@ -1296,7 +1075,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: response
           }
         ]
@@ -1305,7 +1084,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to get OTP status: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
@@ -1330,7 +1109,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: response
           }
         ]
@@ -1339,7 +1118,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to disable OTP: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
@@ -1355,7 +1134,7 @@ class PersonalInfoMCPServer {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: '❌ OTP is not enabled. Use the `setup_otp` tool first.'
             }
           ]
@@ -1377,7 +1156,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: response
           }
         ]
@@ -1386,7 +1165,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to regenerate backup codes: ${error instanceof Error ? error.message : String(error)}`
           }
         ]
@@ -1408,7 +1187,7 @@ class PersonalInfoMCPServer {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: response
             }
           ]
@@ -1453,7 +1232,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: response
           }
         ]
@@ -1462,7 +1241,7 @@ class PersonalInfoMCPServer {
       return {
         content: [
           {
-            type: 'text',
+            type: 'text' as const,
             text: `❌ Failed to get OTP debug info: ${error instanceof Error ? error.message : String(error)}`
           }
         ]

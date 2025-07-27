@@ -37,7 +37,7 @@ export const PersonalInfoFileSchema = z.object({
 // Custom Scope Schema
 export const CustomScopeSchema = z.object({
   description: z.string().min(1, "Description is required"),
-  sensitivity_level: z.number().min(1).max(10),
+  sensitivity_level: z.number().min(1).max(10).describe("1=public, 10=highly sensitive"),
   parent_scope: z.string().optional(),
   created: z.string().datetime()
 });
@@ -52,8 +52,8 @@ export const BuiltInScopeSchema = z.object({
 
 // Tool Input Schemas
 export const GetPersonalInfoInputSchema = z.object({
-  has_list_available_personal_info: z.boolean().default(false),
-  category: z.string().min(1, "Category is required"),
+  has_list_available_personal_info: z.boolean().default(false).describe("If true, you already listed all categories"),
+  category: z.string().min(1, "Category is required").describe("e.g., 'name', 'phone', 'address', 'hobbies', 'pets', 'family', 'friends', 'work'"),
   subcategory: z.string().optional()
 });
 
@@ -61,7 +61,7 @@ export const SavePersonalInfoInputSchema = z.object({
   category: z.string().min(1, "Category is required"),
   subcategory: z.string().optional(),
   content: z.string().min(1, "Content is required"),
-  scope: z.string().min(1, "Scope is required"),
+  scope: z.string().min(1, "Scope is required").describe("public, contact, location, personal, memories, sensitive, or custom scope"),
   tags: z.array(z.string()).optional()
 });
 
@@ -71,12 +71,7 @@ export const UpdatePersonalInfoInputSchema = z.object({
   content: z.string().optional(),
   scope: z.string().optional(),
   tags: z.array(z.string()).optional()
-}).refine(
-  (data) => data.content !== undefined || data.scope !== undefined || data.tags !== undefined,
-  {
-    message: "At least one field (content, scope, or tags) must be provided for update",
-  }
-);
+});
 
 export const ListAvailableInfoInputSchema = z.object({
   scope_filter: z.string().optional()
@@ -98,12 +93,12 @@ export const SearchMemoriesInputSchema = z.object({
 
 export const CreateScopeInputSchema = z.object({
   scope_name: z.string()
-    .regex(/^[a-z][a-z0-9_-]*$/, "Scope name must start with lowercase letter and contain only lowercase letters, numbers, underscores, and hyphens")
-    .min(2, "Scope name must be at least 2 characters")
-    .max(50, "Scope name must be at most 50 characters"),
+    .regex(/^[a-z][a-z0-9_-]*$/, "Must start with lowercase letter, contain only lowercase letters, numbers, underscores, and hyphens")
+    .min(2, "Must be at least 2 characters")
+    .max(50, "Must be at most 50 characters"),
   description: z.string().min(5, "Description must be at least 5 characters"),
   parent_scope: z.string().optional(),
-  sensitivity_level: z.number().min(1).max(10).default(5)
+  sensitivity_level: z.number().min(1).max(10).default(5).describe("1=public, 10=highly sensitive")
 });
 
 export const ListScopesInputSchema = z.object({
@@ -113,9 +108,9 @@ export const ListScopesInputSchema = z.object({
 
 // Batch operation schemas
 export const BatchGetPersonalInfoInputSchema = z.object({
-  has_list_available_personal_info: z.boolean().default(false),
+  has_list_available_personal_info: z.boolean().default(false).describe("If true, you already listed all categories"),
   requests: z.array(z.object({
-    category: z.string().min(1, "Category is required"),
+    category: z.string().min(1, "Category is required").describe("e.g., 'name','phone', 'address', 'hobbies', 'pets', 'family', 'friends', 'work'"),
     subcategory: z.string().optional()
   })).min(1, "At least one request is required")
 });
@@ -125,7 +120,7 @@ export const BatchSavePersonalInfoInputSchema = z.object({
     category: z.string().min(1, "Category is required"),
     subcategory: z.string().optional(),
     content: z.string().min(1, "Content is required"),
-    scope: z.string().min(1, "Scope is required"),
+    scope: z.string().min(1, "Scope is required").describe("public, contact, location, personal, memories, sensitive, or custom scope"),
     tags: z.array(z.string()).optional()
   })).min(1, "At least one item is required")
 });
@@ -206,16 +201,16 @@ export const BUILT_IN_SCOPES: BuiltInScope[] = [
 
 // OTP Setup Input Schema
 export const SetupOTPInputSchema = z.object({
-  issuer: z.string().optional(),
-  label: z.string().optional(),
-  digits: z.number().min(4).max(8).optional(),
-  period: z.number().min(15).max(300).optional()
+  issuer: z.string().optional().describe("Service name (defaults to 'Personal MCP Server')"),
+  label: z.string().optional().describe("Account label (defaults to 'Personal Data Access')"),
+  digits: z.number().min(4).max(8).optional().describe("Number of digits in OTP tokens (default: 6)"),
+  period: z.number().min(15).max(300).optional().describe("Token validity period in seconds (default: 30)")
 });
 
 // OTP Verification Input Schema
 export const VerifyOTPInputSchema = z.object({
-  token: z.string(),
-  useBackupCode: z.boolean().default(false),
+  token: z.string().describe("OTP token from authenticator app or backup code"),
+  useBackupCode: z.boolean().default(false).describe("Set to true if using a backup code"),
   userId: z.string().optional()
 });
 
@@ -226,4 +221,4 @@ export const OTPStatusInputSchema = z.object({});
 export const RegenerateBackupCodesInputSchema = z.object({});
 
 // OTP Debug Input Schema
-export const OTPDebugInputSchema = z.object({}); 
+export const OTPDebugInputSchema = z.object({});
