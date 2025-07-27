@@ -68,7 +68,8 @@ export const registerVerifyOTPTool = (server: McpServer, sessionManager: any): v
       const result = await verifyOTP(args, currentContext);
 
       // Special handling for successful OTP verification
-      if (result.content[0]?.text.includes('✅ OTP Token Verified Successfully')) {
+      const firstContent = result.content[0];
+      if (firstContent?.type === 'text' && firstContent.text.includes('✅ OTP Token Verified Successfully')) {
         const sessionDuration = 5 * 60 * 1000; // 5 minutes
         const newSession = {
           token: args.token,

@@ -32,6 +32,32 @@ export const createOTPNotEnabledResponse = (): ToolResult => {
   return createTextResponse('❌ OTP is not enabled. Use the `setup_otp` tool first.');
 };
 
+// Helper for creating image responses
+export const createImageResponse = (base64Data: string, mimeType: string = 'image/png'): ToolResult => ({
+  content: [
+    {
+      type: 'image' as const,
+      data: base64Data,
+      mimeType
+    }
+  ]
+});
+
+// Helper for creating combined text and image responses
+export const createTextAndImageResponse = (text: string, base64Data: string, mimeType: string = 'image/png'): ToolResult => ({
+  content: [
+    {
+      type: 'text' as const,
+      text
+    },
+    {
+      type: 'image' as const,
+      data: base64Data,
+      mimeType
+    }
+  ]
+});
+
 // Helper for building markdown-formatted responses
 export const createMarkdownResponse = (title: string, sections: Array<{ title: string; content: string }>): ToolResult => {
   let result = `# ${title}\n\n`;

@@ -1,6 +1,6 @@
 import { ServerContext, ToolHandler, ToolResult } from '../../core/Context.js';
 import { safeParse } from '../../core/Validation.js';
-import { createTextResponse } from '../../core/Response.js';
+import { createTextAndImageResponse, createTextResponse } from '../../core/Response.js';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -9,7 +9,8 @@ export const SetupOTPInputSchema = z.object({
   issuer: z.string().optional().describe("Service name (defaults to 'Personal MCP Server')"),
   label: z.string().optional().describe("Account label (defaults to 'Personal Data Access')"),
   digits: z.number().min(4).max(8).optional().describe("Number of digits in OTP tokens (default: 6)"),
-  period: z.number().min(15).max(300).optional().describe("Token validity period in seconds (default: 30)")
+  period: z.number().min(15).max(300).optional().describe("Token validity period in seconds (default: 30)"),
+  qrSize: z.number().min(64).max(512).optional().describe("QR code size in pixels (default: 128)")
 });
 
 type SetupOTPInput = z.infer<typeof SetupOTPInputSchema>;
@@ -24,6 +25,7 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     if (input.label !== undefined) setupOptions.label = input.label;
     if (input.digits !== undefined) setupOptions.digits = input.digits;
     if (input.period !== undefined) setupOptions.period = input.period;
+    if (input.qrSize !== undefined) setupOptions.qrSize = input.qrSize;
     
     const result = await context.otpManager.setupOTP(setupOptions);
 
@@ -32,12 +34,14 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
       context.fileManager.enableEncryption();
     }
 
+    // Extract base64 data from the data URL
+    const base64Data = result.qrCodeDataURL.replace(/^data:image\/png;base64,/, '');
+
     let response = '# OTP Setup Complete! 🔐\n\n';
     response += 'Your One-Time Password authentication has been successfully configured.\n\n';
-    response += '## 📱 Set up your Authenticator App\n\n';
-    response += 'Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)\n\n';
-    response += `**Secret Key:** \`${result.secret}\`\n`;
-    response += `**URI:** \`${result.qrCodeUri}\`\n\n`;
+    response += '## 📱 Scan the QR Code\n\n';
+    response += 'Scan the QR code below with your authenticator app (Google Authenticator, Authy, 1Password, etc.)\n\n';
+    response += `**Secret Key (manual entry):** \`${result.secret}\`\n\n`;
     response += '## 🆘 Emergency Backup Codes\n\n';
     response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
     
@@ -54,8 +58,9 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     response += `- **Digits:** ${input.digits || 6}\n`;
     response += `- **Period:** ${input.period || 30} seconds\n`;
     response += `- **Issuer:** ${input.issuer || 'Personal MCP Server'}\n`;
+    response += `- **QR Code Size:** ${input.qrSize || 128} pixels\n`;
 
-    return createTextResponse(response);
+    return createTextAndImageResponse(response, base64Data, 'image/png');
   } catch (error) {
     return createTextResponse(`❌ Failed to set up OTP: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -65,7 +70,7 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
 export const registerSetupOTPTool = (server: McpServer, sessionManager: any): void => {
   server.registerTool('setup_otp', {
     title: "Setup OTP",
-    description: "Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code and backup codes.",
+    description: "Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code image and backup codes.",
     inputSchema: SetupOTPInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {
