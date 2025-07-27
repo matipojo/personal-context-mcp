@@ -6,14 +6,17 @@ import {
   type PersonalInfoFile, 
   PersonalInfoFileSchema 
 } from '../types/schemas.js';
+import { EncryptionManager, type DecryptionOptions } from './EncryptionManager.js';
 
 export class FileManager {
   private dataDir: string;
   private maxFileSize: number;
+  private encryptionManager: EncryptionManager;
 
-  constructor(dataDir: string, maxFileSize: number = 1048576) { // 1MB default
+  constructor(dataDir: string, maxFileSize: number = 1048576, encryptionManager?: EncryptionManager) { // 1MB default
     this.dataDir = dataDir;
     this.maxFileSize = maxFileSize;
+    this.encryptionManager = encryptionManager || new EncryptionManager();
   }
 
   /**
@@ -34,7 +37,7 @@ export class FileManager {
   /**
    * Read a markdown file with YAML frontmatter
    */
-  async readMarkdownFile(filePath: string): Promise<PersonalInfoFile> {
+  async readMarkdownFile(filePath: string, decryptionOptions?: DecryptionOptions): Promise<PersonalInfoFile> {
     try {
       // Check file exists
       if (!(await fs.pathExists(filePath))) {
@@ -47,7 +50,13 @@ export class FileManager {
         throw new Error(`File too large: ${filePath} (${stats.size} bytes, max: ${this.maxFileSize})`);
       }
 
-      const content = await fs.readFile(filePath, 'utf-8');
+      let content = await fs.readFile(filePath, 'utf-8');
+      
+      // Decrypt content if encryption is enabled and decryption options are provided
+      if (this.encryptionManager.isEnabled() && decryptionOptions) {
+        content = await this.encryptionManager.decryptFileContent(content, decryptionOptions);
+      }
+      
       const { frontmatter, body } = this.parseFrontmatter(content);
 
       const file: PersonalInfoFile = {
@@ -66,7 +75,7 @@ export class FileManager {
   /**
    * Write a markdown file with YAML frontmatter
    */
-  async writeMarkdownFile(filePath: string, data: PersonalInfoFile): Promise<void> {
+  async writeMarkdownFile(filePath: string, data: PersonalInfoFile, encryptionOptions?: DecryptionOptions): Promise<void> {
     try {
       // Validate input data
       const validatedData = PersonalInfoFileSchema.parse(data);
@@ -75,7 +84,12 @@ export class FileManager {
       await fs.ensureDir(path.dirname(filePath));
 
       // Create file content with frontmatter
-      const content = this.createFileContent(validatedData.frontmatter, validatedData.content);
+      let content = this.createFileContent(validatedData.frontmatter, validatedData.content);
+      
+      // Encrypt content if encryption is enabled and encryption options are provided
+      if (this.encryptionManager.isEnabled() && encryptionOptions) {
+        content = await this.encryptionManager.encryptFileContent(content, encryptionOptions);
+      }
 
       // Check content size
       if (Buffer.byteLength(content, 'utf-8') > this.maxFileSize) {
@@ -96,7 +110,7 @@ export class FileManager {
   /**
    * List all files within allowed scopes
    */
-  async listFiles(allowedScopes: string[]): Promise<PersonalInfoFile[]> {
+  async listFiles(allowedScopes: string[], decryptionOptions?: DecryptionOptions): Promise<PersonalInfoFile[]> {
     const files: PersonalInfoFile[] = [];
 
     for (const scope of allowedScopes) {
@@ -110,7 +124,7 @@ export class FileManager {
 
           for (const filePath of filePaths) {
             try {
-              const file = await this.readMarkdownFile(filePath);
+              const file = await this.readMarkdownFile(filePath, decryptionOptions);
               files.push(file);
             } catch (error) {
               console.warn(`Skipping invalid file ${filePath}:`, error);
@@ -182,9 +196,10 @@ export class FileManager {
   async findFilesByCategory(
     allowedScopes: string[], 
     category: string, 
-    subcategory?: string
+    subcategory?: string,
+    decryptionOptions?: DecryptionOptions
   ): Promise<PersonalInfoFile[]> {
-    const allFiles = await this.listFiles(allowedScopes);
+    const allFiles = await this.listFiles(allowedScopes, decryptionOptions);
     
     return allFiles.filter(file => {
       const matchesCategory = file.frontmatter.category === category;
@@ -200,9 +215,10 @@ export class FileManager {
     allowedScopes: string[], 
     query: string, 
     tags?: string[],
-    dateRange?: { start: string; end: string }
+    dateRange?: { start: string; end: string },
+    decryptionOptions?: DecryptionOptions
   ): Promise<PersonalInfoFile[]> {
-    const allFiles = await this.listFiles(allowedScopes);
+    const allFiles = await this.listFiles(allowedScopes, decryptionOptions);
     const queryLower = query.toLowerCase();
 
     return allFiles.filter(file => {
@@ -231,13 +247,19 @@ export class FileManager {
   /**
    * Get file metadata without reading full content
    */
-  async getFileMetadata(filePath: string): Promise<PersonalInfoFile['frontmatter'] | null> {
+  async getFileMetadata(filePath: string, decryptionOptions?: DecryptionOptions): Promise<PersonalInfoFile['frontmatter'] | null> {
     try {
       if (!(await fs.pathExists(filePath))) {
         return null;
       }
 
-      const content = await fs.readFile(filePath, 'utf-8');
+      let content = await fs.readFile(filePath, 'utf-8');
+      
+      // Decrypt content if encryption is enabled and decryption options are provided
+      if (this.encryptionManager.isEnabled() && decryptionOptions) {
+        content = await this.encryptionManager.decryptFileContent(content, decryptionOptions);
+      }
+      
       const { frontmatter } = this.parseFrontmatter(content);
       return frontmatter;
     } catch (error) {
@@ -265,6 +287,46 @@ export class FileManager {
       console.warn(`Failed to create backup for ${filePath}:`, error);
       return null;
     }
+  }
+
+  /**
+   * Enable encryption with the provided configuration
+   */
+  enableEncryption(config?: Partial<EncryptionManager['config']>): void {
+    if (config) {
+      this.encryptionManager.updateConfig(config);
+    }
+    this.encryptionManager.enableEncryption();
+  }
+
+  /**
+   * Disable encryption
+   */
+  disableEncryption(): void {
+    this.encryptionManager.disableEncryption();
+  }
+
+  /**
+   * Check if a file is encrypted
+   */
+  async isFileEncrypted(filePath: string): Promise<boolean> {
+    try {
+      if (!(await fs.pathExists(filePath))) {
+        return false;
+      }
+      
+      const content = await fs.readFile(filePath, 'utf-8');
+      return this.encryptionManager.isContentEncrypted(content);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get encryption manager instance
+   */
+  getEncryptionManager(): EncryptionManager {
+    return this.encryptionManager;
   }
 
   /**

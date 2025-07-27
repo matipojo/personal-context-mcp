@@ -16,18 +16,28 @@ import {
   ListScopesInputSchema,
   BatchGetPersonalInfoInputSchema,
   BatchSavePersonalInfoInputSchema,
+  SetupOTPInputSchema,
+  VerifyOTPInputSchema,
+  OTPStatusInputSchema,
+  RegenerateBackupCodesInputSchema,
+  OTPDebugInputSchema,
   ToolNames
 } from './types/schemas.js';
 import { resolveScopeConfig } from './utils/scopeParser.js';
 import { parseDataDirectory } from './utils/scopeParser.js';
 import { PermissionManager } from './managers/PermissionManager.js';
 import { FileManager } from './managers/FileManager.js';
+import { OTPManager, type OTPVerificationResult } from './managers/OTPManager.js';
+import { EncryptionManager } from './managers/EncryptionManager.js';
 
 class PersonalInfoMCPServer {
   private server: Server;
   private permissionManager!: PermissionManager;
   private fileManager!: FileManager;
+  private otpManager!: OTPManager;
+  private encryptionManager!: EncryptionManager;
   private config: ReturnType<typeof EnvironmentConfigSchema.parse>;
+  private currentOTPSession: { token: string; expires: number; userId?: string } | null = null;
 
   constructor() {
     this.server = new Server(
@@ -79,30 +89,6 @@ class PersonalInfoMCPServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       return {
         tools: [
-          {
-            name: ToolNames.GET_PERSONAL_INFO,
-            description: `Retrieve personal information based on category and current scope permissions, 
-            you can get a wide range of information, personal, pets, family, friends, work, etc and even more.
-             You must list once all the categories with the list_available_personal_info tool before using this tool to understand what you can get.`,
-            inputSchema: {
-              type: 'object',
-              properties: {
-                has_list_available_personal_info: {
-                  type: 'boolean',
-                  description: 'If true, you already listed all the categories with the list_available_personal_info tool'
-                },
-                category: {
-                  type: 'string',
-                  description: 'Category of information to retrieve (e.g., "name","phone", "address", "hobbies", "pets", "family", "friends", "work")'
-                },
-                subcategory: {
-                  type: 'string',
-                  description: 'Optional subcategory filter'
-                }
-              },
-              required: ['category']
-            }
-          },
           {
             name: ToolNames.SAVE_PERSONAL_INFO,
             description: 'Save or update personal information. You should save things on every time when user enters new personal information that not saved yet.',
@@ -253,7 +239,10 @@ class PersonalInfoMCPServer {
           },
           {
             name: ToolNames.BATCH_GET_PERSONAL_INFO,
-            description: 'Retrieve multiple categories of personal information in a single request. More efficient than making multiple individual requests.',
+            description: `Retrieve multiple categories of personal information in a single request.
+            Retrieve personal information based on category and current scope permissions, 
+            you can get a wide range of information, personal, pets, family, friends, work, etc and even more.
+            You must list once all the categories with the list_available_personal_info tool before using this tool to understand what you can get.`,
             inputSchema: {
               type: 'object',
               properties: {
@@ -314,6 +303,90 @@ class PersonalInfoMCPServer {
               },
               required: ['items']
             }
+          },
+          {
+            name: ToolNames.SETUP_OTP,
+            description: 'Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code and backup codes.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                issuer: {
+                  type: 'string',
+                  description: 'Service name (defaults to "Personal MCP Server")'
+                },
+                label: {
+                  type: 'string',
+                  description: 'Account label (defaults to "Personal Data Access")'
+                },
+                digits: {
+                  type: 'integer',
+                  minimum: 4,
+                  maximum: 8,
+                  description: 'Number of digits in OTP tokens (default: 6)'
+                },
+                period: {
+                  type: 'integer',
+                  minimum: 15,
+                  maximum: 300,
+                  description: 'Token validity period in seconds (default: 30)'
+                }
+              }
+            }
+          },
+          {
+            name: ToolNames.VERIFY_OTP,
+            description: 'Verify an OTP token to access encrypted personal data. Required before reading encrypted information.',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                token: {
+                  type: 'string',
+                  description: 'OTP token from authenticator app or backup code'
+                },
+                useBackupCode: {
+                  type: 'boolean',
+                  description: 'Set to true if using a backup code instead of OTP token'
+                },
+                userId: {
+                  type: 'string',
+                  description: 'Optional user identifier for multi-user scenarios'
+                }
+              },
+              required: ['token']
+            }
+          },
+          {
+            name: ToolNames.OTP_STATUS,
+            description: `Check the current OTP configuration status and whether OTP verification is required. 
+            Don't continue to use any other tools until you get the status of the OTP.`,
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: ToolNames.DISABLE_OTP,
+            description: 'Disable OTP authentication and encryption for personal data.',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: ToolNames.REGENERATE_BACKUP_CODES,
+            description: 'Generate new backup codes for emergency access. Previous backup codes will be invalidated.',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
+          },
+          {
+            name: ToolNames.OTP_DEBUG,
+            description: 'Debug OTP issues by showing current expected tokens and configuration. Use this when OTP verification fails.',
+            inputSchema: {
+              type: 'object',
+              properties: {}
+            }
           }
         ]
       };
@@ -345,6 +418,18 @@ class PersonalInfoMCPServer {
             return await this.handleBatchGetPersonalInfo(args);
           case ToolNames.BATCH_SAVE_PERSONAL_INFO:
             return await this.handleBatchSavePersonalInfo(args);
+          case ToolNames.SETUP_OTP:
+            return await this.handleSetupOTP(args);
+          case ToolNames.VERIFY_OTP:
+            return await this.handleVerifyOTP(args);
+          case ToolNames.OTP_STATUS:
+            return await this.handleOTPStatus(args);
+          case ToolNames.DISABLE_OTP:
+            return await this.handleDisableOTP(args);
+          case ToolNames.REGENERATE_BACKUP_CODES:
+            return await this.handleRegenerateBackupCodes(args);
+          case ToolNames.OTP_DEBUG:
+            return await this.handleOTPDebug(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -369,10 +454,14 @@ class PersonalInfoMCPServer {
       throw new Error('You must list once all the categories with the list_available_personal_info tool before using this tool');
     }
 
+    // Get decryption options if OTP is active
+    const decryptionOptions = this.getDecryptionOptions();
+
     const files = await this.fileManager.findFilesByCategory(
       this.permissionManager.getAllowedScopes(),
       input.category,
-      input.subcategory
+      input.subcategory,
+      decryptionOptions
     );
 
     if (files.length === 0) {
@@ -410,6 +499,9 @@ class PersonalInfoMCPServer {
   private async handleSavePersonalInfo(args: unknown) {
     const input = SavePersonalInfoInputSchema.parse(args);
 
+    // Get encryption options if OTP is active (this will throw if OTP verification is required)
+    const encryptionOptions = this.getDecryptionOptions();
+
     // Check if we have permission to write to this scope
     if (!this.permissionManager.isAccessAllowed(input.scope)) {
       throw new Error(`Access denied: scope '${input.scope}' is not allowed`);
@@ -431,7 +523,7 @@ class PersonalInfoMCPServer {
       await this.fileManager.createBackup(filePath, this.config.PERSONAL_INFO_BACKUP_DIR);
     }
 
-    const existingFile = isUpdate ? await this.fileManager.readMarkdownFile(filePath) : null;
+    const existingFile = isUpdate ? await this.fileManager.readMarkdownFile(filePath, encryptionOptions) : null;
 
     const fileData = {
       frontmatter: {
@@ -446,7 +538,7 @@ class PersonalInfoMCPServer {
       filePath: ''
     };
 
-    await this.fileManager.writeMarkdownFile(filePath, fileData);
+    await this.fileManager.writeMarkdownFile(filePath, fileData, encryptionOptions);
 
     return {
       content: [
@@ -461,11 +553,15 @@ class PersonalInfoMCPServer {
   private async handleUpdatePersonalInfo(args: unknown) {
     const input = UpdatePersonalInfoInputSchema.parse(args);
 
+    // Get encryption options if OTP is active (this will throw if OTP verification is required)
+    const encryptionOptions = this.getDecryptionOptions();
+
     // First, find the existing file to get current scope if not provided
     const files = await this.fileManager.findFilesByCategory(
       this.permissionManager.getAllowedScopes(),
       input.category,
-      input.subcategory
+      input.subcategory,
+      encryptionOptions
     );
 
     if (files.length === 0) {
@@ -507,7 +603,7 @@ class PersonalInfoMCPServer {
       filePath: ''
     };
 
-    await this.fileManager.writeMarkdownFile(filePath, fileData);
+    await this.fileManager.writeMarkdownFile(filePath, fileData, encryptionOptions);
 
     return {
       content: [
@@ -522,13 +618,16 @@ class PersonalInfoMCPServer {
   private async handleListAvailableInfo(args: unknown) {
     const input = ListAvailableInfoInputSchema.parse(args);
     
+    // Get decryption options if OTP is active
+    const decryptionOptions = this.getDecryptionOptions();
+    
     let allowedScopes = this.permissionManager.getAllowedScopes();
     if (input.scope_filter) {
       const filterScopes = input.scope_filter.split(',').map(s => s.trim());
       allowedScopes = allowedScopes.filter(scope => filterScopes.includes(scope));
     }
 
-    const files = await this.fileManager.listFiles(allowedScopes);
+    const files = await this.fileManager.listFiles(allowedScopes, decryptionOptions);
 
     if (files.length === 0) {
       return {
@@ -622,11 +721,15 @@ class PersonalInfoMCPServer {
   private async handleSearchMemories(args: unknown) {
     const input = SearchMemoriesInputSchema.parse(args);
     
+    // Get decryption options if OTP is active
+    const decryptionOptions = this.getDecryptionOptions();
+    
     const files = await this.fileManager.searchFiles(
       this.permissionManager.getAllowedScopes(),
       input.query,
       input.tags,
-      input.date_range
+      input.date_range,
+      decryptionOptions
     );
 
     if (files.length === 0) {
@@ -846,6 +949,9 @@ class PersonalInfoMCPServer {
   private async handleBatchSavePersonalInfo(args: unknown) {
     const input = BatchSavePersonalInfoInputSchema.parse(args);
 
+    // Get decryption/encryption options if OTP is active
+    const encryptionOptions = this.getDecryptionOptions();
+
     const results: Array<{ category: string; subcategory?: string; success: boolean; action: 'created' | 'updated'; error?: string }> = [];
 
     for (const item of input.items) {
@@ -906,7 +1012,7 @@ class PersonalInfoMCPServer {
           filePath: ''
         };
 
-        await this.fileManager.writeMarkdownFile(filePath, fileData);
+        await this.fileManager.writeMarkdownFile(filePath, fileData, encryptionOptions);
 
         const successResult: any = {
           category: item.category,
@@ -972,6 +1078,398 @@ class PersonalInfoMCPServer {
     };
   }
 
+  // Helper method to get decryption options from current OTP session
+  private getDecryptionOptions(): any {
+    // If encryption is enabled, enforce OTP requirements
+    if (this.encryptionManager.isEnabled()) {
+      // If OTP is not enabled but encryption is, require OTP setup first
+      if (!this.otpManager.isEnabled()) {
+        throw new Error('🔒 Encryption is enabled but OTP is not set up. Please use setup_otp tool first to secure your data.');
+      }
+
+      // If no active OTP session, require verification
+      if (!this.currentOTPSession || Date.now() > this.currentOTPSession.expires) {
+        throw new Error('🔒 OTP verification required. Please use verify_otp tool first to access encrypted data.');
+      }
+
+      console.error('🔓 Using OTP session for decryption:', {
+        hasToken: !!this.currentOTPSession.token,
+        expires: new Date(this.currentOTPSession.expires).toISOString(),
+        userId: this.currentOTPSession.userId
+      });
+
+      return {
+        secret: this.config.PERSONAL_INFO_ENCRYPTION_KEY || 'default-secret',
+        otpToken: this.currentOTPSession.token,
+        userId: this.currentOTPSession.userId
+      };
+    }
+
+    // If encryption is not enabled, return null (no encryption needed)
+    return null;
+  }
+
+  private async handleSetupOTP(args: unknown) {
+    try {
+      const input = SetupOTPInputSchema.parse(args);
+      
+      // Set up OTP with the provided options
+      const setupOptions: any = {};
+      if (input.issuer !== undefined) setupOptions.issuer = input.issuer;
+      if (input.label !== undefined) setupOptions.label = input.label;
+      if (input.digits !== undefined) setupOptions.digits = input.digits;
+      if (input.period !== undefined) setupOptions.period = input.period;
+      
+      const result = await this.otpManager.setupOTP(setupOptions);
+
+      // If encryption is enabled, also enable it in the file manager
+      if (this.encryptionManager.isEnabled()) {
+        this.fileManager.enableEncryption();
+      }
+
+      let response = '# OTP Setup Complete! 🔐\n\n';
+      response += 'Your One-Time Password authentication has been successfully configured.\n\n';
+      response += '## 📱 Set up your Authenticator App\n\n';
+      response += 'Scan this QR code with your authenticator app (Google Authenticator, Authy, 1Password, etc.)\n\n';
+      response += `### QR Code Image\n\n`;
+      response += `![OTP QR Code](${result.qrCodeDataURL})\n\n`;
+      response += `**📁 QR Code Files Saved:**\n`;
+      response += `- PNG Image: \`data/.security/qr-codes/otp-qrcode.png\`\n`;
+      response += `- SVG Image: \`data/.security/qr-codes/otp-qrcode.svg\`\n`;
+      response += `- URI Text: \`data/.security/qr-codes/otp-uri.txt\`\n\n`;
+      response += `### Manual Entry (if QR code doesn't work)\n\n`;
+      response += `**Secret Key:** \`${result.secret}\`\n`;
+      response += `**URI:** \`${result.qrCodeUri}\`\n\n`;
+      response += '## 🆘 Emergency Backup Codes\n\n';
+      response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
+      
+      result.backupCodes.forEach((code, index) => {
+        response += `${index + 1}. \`${code}\`\n`;
+      });
+      
+      response += '\n## 🔑 Next Steps\n\n';
+      response += '1. Scan the QR code with your authenticator app\n';
+      response += '2. Use the `verify_otp` tool with a token from your app to test\n';
+      response += '3. Once verified, your personal data will be encrypted with OTP-enhanced security\n';
+      response += '4. You\'ll need to verify an OTP token before accessing encrypted information\n\n';
+      response += '## ⚙️ Configuration\n\n';
+      response += `- **Digits:** ${input.digits || 6}\n`;
+      response += `- **Period:** ${input.period || 30} seconds\n`;
+      response += `- **Issuer:** ${input.issuer || 'Personal MCP Server'}\n`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to set up OTP: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
+  private async handleVerifyOTP(args: unknown) {
+    try {
+      const input = VerifyOTPInputSchema.parse(args);
+      
+      if (!this.otpManager.isEnabled()) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ OTP is not enabled. Use the `setup_otp` tool first.'
+            }
+          ]
+        };
+      }
+
+      const result = await this.otpManager.verifyToken(input.token, input.useBackupCode);
+      
+      if (result.isValid) {
+        // Create a session that lasts for the token period + some buffer
+        const sessionDuration = 5 * 60 * 1000; // 5 minutes
+        const session: any = {
+          token: input.token,
+          expires: Date.now() + sessionDuration
+        };
+        if (input.userId !== undefined) {
+          session.userId = input.userId;
+        }
+        this.currentOTPSession = session;
+
+        let response = '✅ OTP Token Verified Successfully! 🔓\n\n';
+        response += 'You now have access to encrypted personal data.\n\n';
+        
+        if (result.timeRemaining) {
+          response += `⏰ **Token expires in:** ${Math.floor(result.timeRemaining / 1000)} seconds\n`;
+        }
+        
+        response += `🔑 **Session valid for:** ${Math.floor(sessionDuration / 1000 / 60)} minutes\n\n`;
+        
+        if (input.useBackupCode) {
+          response += '⚠️ **Backup code used:** This code cannot be used again.\n\n';
+        }
+        
+        response += 'You can now access your encrypted personal information using the regular tools.';
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: response
+            }
+          ]
+        };
+      } else {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `❌ Invalid OTP token. Please check your authenticator app and try again.`
+            }
+          ]
+        };
+      }
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to verify OTP: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
+  private async handleOTPStatus(args: unknown) {
+    try {
+      OTPStatusInputSchema.parse(args);
+      
+      const isEnabled = this.otpManager.isEnabled();
+      const config = this.otpManager.getConfig();
+      const isSessionActive = this.currentOTPSession && Date.now() < this.currentOTPSession.expires;
+      
+      let response = '# OTP Status 🔐\n\n';
+      
+      if (isEnabled) {
+        response += '✅ **OTP is ENABLED**\n\n';
+        response += '## Configuration\n\n';
+        if (config) {
+          response += `- **Digits:** ${config.digits}\n`;
+          response += `- **Period:** ${config.period} seconds\n`;
+          response += `- **Issuer:** ${config.issuer}\n`;
+          response += `- **Label:** ${config.label}\n`;
+        }
+        
+        response += '\n## Session Status\n\n';
+        if (isSessionActive) {
+          const remaining = Math.floor((this.currentOTPSession!.expires - Date.now()) / 1000 / 60);
+          response += `🔓 **Active session:** ${remaining} minutes remaining\n`;
+          response += 'You can access encrypted data without re-verification.\n';
+        } else {
+          response += '🔒 **No active session:** Use `verify_otp` to access encrypted data.\n';
+        }
+        
+        response += '\n## Encryption Status\n\n';
+        if (this.encryptionManager.isEnabled()) {
+          response += '🔐 **Encryption is ENABLED** - Personal data is encrypted\n';
+        } else {
+          response += '🔓 **Encryption is DISABLED** - Personal data is stored in plain text\n';
+        }
+        
+      } else {
+        response += '❌ **OTP is DISABLED**\n\n';
+        response += 'Your personal data is not protected by OTP authentication.\n';
+        response += 'Use the `setup_otp` tool to enable OTP protection.\n';
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to get OTP status: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
+  private async handleDisableOTP(args: unknown) {
+    try {
+      OTPStatusInputSchema.parse(args);
+      
+      await this.otpManager.disableOTP();
+      this.encryptionManager.disableEncryption();
+      this.fileManager.disableEncryption();
+      this.currentOTPSession = null;
+
+      const response = '✅ OTP Disabled Successfully 🔓\n\n' +
+        'OTP authentication and encryption have been disabled.\n' +
+        'Your personal data is now stored without encryption.\n\n' +
+        '⚠️ **Security Notice:** Your data is no longer protected by OTP authentication.';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to disable OTP: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
+  private async handleRegenerateBackupCodes(args: unknown) {
+    try {
+      RegenerateBackupCodesInputSchema.parse(args);
+      
+      if (!this.otpManager.isEnabled()) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ OTP is not enabled. Use the `setup_otp` tool first.'
+            }
+          ]
+        };
+      }
+
+      const backupCodes = await this.otpManager.regenerateBackupCodes();
+      
+      let response = '✅ New Backup Codes Generated! 🆘\n\n';
+      response += '**⚠️ IMPORTANT:** Your old backup codes are now invalid. Save these new codes in a secure location.\n\n';
+      response += '## 🔑 Emergency Backup Codes\n\n';
+      
+      backupCodes.forEach((code, index) => {
+        response += `${index + 1}. \`${code}\`\n`;
+      });
+      
+      response += '\n**Note:** Each backup code can only be used once for emergency access.';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to regenerate backup codes: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
+  private async handleOTPDebug(args: unknown) {
+    try {
+      OTPDebugInputSchema.parse(args);
+      
+      const debugInfo = await this.otpManager.getDebugInfo();
+      
+      let response = '# OTP Debug Information 🔍\n\n';
+      
+      if (!debugInfo.isEnabled) {
+        response += '❌ **OTP is not enabled**\n\n';
+        response += 'Use the `setup_otp` tool to enable OTP first.\n';
+        return {
+          content: [
+            {
+              type: 'text',
+              text: response
+            }
+          ]
+        };
+      }
+
+      response += '✅ **OTP is enabled**\n\n';
+      response += '## Current Status\n\n';
+      response += `**Current Timestamp:** ${debugInfo.timestamp}\n`;
+      
+      if (debugInfo.currentToken) {
+        response += `**Current Expected Token:** \`${debugInfo.currentToken}\`\n`;
+        response += `**Next Token:** \`${debugInfo.nextToken}\`\n`;
+        response += `**Time Remaining:** ${Math.floor(debugInfo.timeRemaining! / 1000)} seconds\n\n`;
+      }
+
+      if (debugInfo.config) {
+        response += '## Configuration\n\n';
+        response += `**Digits:** ${debugInfo.config.digits}\n`;
+        response += `**Period:** ${debugInfo.config.period} seconds\n`;
+        response += `**Algorithm:** ${debugInfo.config.algorithm}\n`;
+        response += `**Window:** ${debugInfo.config.window}\n`;
+        response += `**Issuer:** ${debugInfo.config.issuer}\n`;
+        response += `**Label:** ${debugInfo.config.label}\n`;
+        response += `**Secret Preview:** ${debugInfo.secretPreview}\n\n`;
+      }
+
+      response += '## Troubleshooting\n\n';
+      response += '1. **Check your authenticator app** - Make sure it shows the same issuer/label\n';
+      response += '2. **Verify the current token** - Try the current expected token above\n';
+      response += '3. **Check clock synchronization** - Ensure your device and server clocks are synchronized\n';
+      response += '4. **Try waiting** - Wait for the next token period and try again\n';
+      response += '5. **Use backup codes** - If all else fails, use a backup code\n\n';
+      
+      response += '## Clock Synchronization\n\n';
+      response += `**Server Time:** ${new Date().toISOString()}\n`;
+      response += `**Server Timezone:** ${Intl.DateTimeFormat().resolvedOptions().timeZone}\n`;
+      response += '**Your Device Time:** Check that your device shows the same time\n\n';
+      
+      response += '💡 **Tip:** If the current expected token doesn\'t work, there might be a clock synchronization issue.';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response
+          }
+        ]
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to get OTP debug info: ${error instanceof Error ? error.message : String(error)}`
+          }
+        ]
+      };
+    }
+  }
+
   async initialize(): Promise<void> {
     try {
       console.error('🔧 Initializing Personal Information MCP Server...');
@@ -982,10 +1480,15 @@ class PersonalInfoMCPServer {
 
       // Initialize managers
       this.permissionManager = new PermissionManager(scopeConfig, this.config.PERSONAL_INFO_DATA_DIR);
-      this.fileManager = new FileManager(this.config.PERSONAL_INFO_DATA_DIR, this.config.PERSONAL_INFO_MAX_FILE_SIZE);
+      this.encryptionManager = new EncryptionManager({
+        enabled: this.config.PERSONAL_INFO_ENCRYPTION_ENABLED
+      });
+      this.fileManager = new FileManager(this.config.PERSONAL_INFO_DATA_DIR, this.config.PERSONAL_INFO_MAX_FILE_SIZE, this.encryptionManager);
+      this.otpManager = new OTPManager(this.config.PERSONAL_INFO_DATA_DIR);
 
       await this.permissionManager.initialize();
       await this.fileManager.initialize();
+      await this.otpManager.initialize();
 
       // Re-resolve scope config now that custom scopes are loaded
       const finalScopeConfig = resolveScopeConfig(process.argv, this.permissionManager.getCustomScopes());

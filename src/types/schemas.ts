@@ -11,7 +11,13 @@ export enum ToolNames {
   CREATE_PERSONAL_SCOPE = 'create_personal_scope',
   LIST_PERSONAL_SCOPES = 'list_personal_scopes',
   BATCH_GET_PERSONAL_INFO = 'batch_get_personal_info',
-  BATCH_SAVE_PERSONAL_INFO = 'batch_save_personal_info'
+  BATCH_SAVE_PERSONAL_INFO = 'batch_save_personal_info',
+  SETUP_OTP = 'setup_otp',
+  VERIFY_OTP = 'verify_otp',
+  DISABLE_OTP = 'disable_otp',
+  OTP_STATUS = 'otp_status',
+  REGENERATE_BACKUP_CODES = 'regenerate_backup_codes',
+  OTP_DEBUG = 'otp_debug'
 }
 
 // Personal Information File Schema
@@ -196,4 +202,28 @@ export const BUILT_IN_SCOPES: BuiltInScope[] = [
     sensitivity_level: 9,
     example_data: 'Health data, financial info'
   }
-]; 
+];
+
+// OTP Setup Input Schema
+export const SetupOTPInputSchema = z.object({
+  issuer: z.string().optional(),
+  label: z.string().optional(),
+  digits: z.number().min(4).max(8).optional(),
+  period: z.number().min(15).max(300).optional()
+});
+
+// OTP Verification Input Schema
+export const VerifyOTPInputSchema = z.object({
+  token: z.string(),
+  useBackupCode: z.boolean().default(false),
+  userId: z.string().optional()
+});
+
+// OTP Status Input Schema
+export const OTPStatusInputSchema = z.object({});
+
+// Regenerate Backup Codes Input Schema
+export const RegenerateBackupCodesInputSchema = z.object({});
+
+// OTP Debug Input Schema
+export const OTPDebugInputSchema = z.object({}); 
