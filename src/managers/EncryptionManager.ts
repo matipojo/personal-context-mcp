@@ -21,6 +21,8 @@ export interface EncryptedData {
   keySize: number;
   iterations: number;
   timestamp: string;
+  // Add version to support migration from old format
+  encryptionVersion?: number;
 }
 
 export interface DecryptionOptions {
@@ -31,6 +33,7 @@ export interface DecryptionOptions {
 
 export class EncryptionManager {
   private config: EncryptionConfig;
+  private static readonly CURRENT_ENCRYPTION_VERSION = 2;
 
   constructor(config: Partial<EncryptionConfig> = {}) {
     this.config = EncryptionConfigSchema.parse(config);
@@ -58,7 +61,8 @@ export class EncryptionManager {
   }
 
   /**
-   * Encrypt data using a master secret and optional OTP token
+   * Encrypt data using a master secret ONLY (no OTP tokens)
+   * OTP is used only for access control, not encryption
    */
   async encryptData(
     plaintext: string,
@@ -75,8 +79,9 @@ export class EncryptionManager {
       // Generate a random IV
       const iv = CryptoJS.lib.WordArray.random(this.config.ivSize / 8);
 
-      // Derive encryption key from master secret + OTP token + user ID
-      const key = this.deriveKey(options.secret, salt, options.otpToken, options.userId);
+      // FIXED: Derive encryption key from ONLY master secret and user ID
+      // OTP tokens are NOT included to prevent permanent data loss
+      const key = this.deriveStableKey(options.secret, salt, options.userId);
 
       // Encrypt the data
       const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
@@ -92,7 +97,8 @@ export class EncryptionManager {
         algorithm: this.config.algorithm,
         keySize: this.config.keySize,
         iterations: this.config.iterations,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        encryptionVersion: EncryptionManager.CURRENT_ENCRYPTION_VERSION
       };
     } catch (error) {
       throw new Error(`Encryption failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -100,7 +106,7 @@ export class EncryptionManager {
   }
 
   /**
-   * Decrypt data using the same secret and OTP token used for encryption
+   * Decrypt data with support for both old and new encryption formats
    */
   async decryptData(
     encryptedData: EncryptedData,
@@ -111,15 +117,29 @@ export class EncryptionManager {
     }
 
     try {
-      // Recreate the key using the same parameters
+      // Recreate the key using the appropriate method based on version
       const salt = CryptoJS.enc.Hex.parse(encryptedData.salt);
-      const key = this.deriveKey(
-        options.secret,
-        salt,
-        options.otpToken,
-        options.userId,
-        encryptedData.iterations || this.config.iterations
-      );
+      let key: CryptoJS.lib.WordArray;
+
+      if (encryptedData.encryptionVersion === 2) {
+        // New format: stable key without OTP
+        key = this.deriveStableKey(
+          options.secret,
+          salt,
+          options.userId,
+          encryptedData.iterations || this.config.iterations
+        );
+      } else {
+        // Legacy format: includes OTP token (may fail for old files)
+        console.warn('⚠️  Attempting to decrypt legacy format with OTP token');
+        key = this.deriveLegacyKey(
+          options.secret,
+          salt,
+          options.otpToken,
+          options.userId,
+          encryptedData.iterations || this.config.iterations
+        );
+      }
 
       // Parse IV
       const iv = CryptoJS.enc.Hex.parse(encryptedData.iv);
@@ -204,16 +224,45 @@ export class EncryptionManager {
   }
 
   /**
-   * Derive an encryption key from multiple sources
+   * NEW: Derive a stable encryption key (without OTP tokens)
+   * This prevents permanent data loss from time-based tokens
    */
-  private deriveKey(
+  private deriveStableKey(
+    masterSecret: string,
+    salt: CryptoJS.lib.WordArray,
+    userId?: string,
+    iterations?: number
+  ): CryptoJS.lib.WordArray {
+    // Combine stable key material only
+    let keyMaterial = masterSecret;
+    
+    // User ID can be included as it's stable
+    if (userId) {
+      keyMaterial += userId;
+    }
+
+    // DO NOT include OTP tokens here - they change every 30 seconds!
+
+    // Use PBKDF2 to derive the key
+    return CryptoJS.PBKDF2(keyMaterial, salt, {
+      keySize: this.config.keySize / 32, // Convert bits to words
+      iterations: iterations || this.config.iterations,
+      hasher: CryptoJS.algo.SHA256
+    });
+  }
+
+  /**
+   * LEGACY: Old key derivation method (for backward compatibility)
+   * This will likely fail for files encrypted more than 30 seconds ago
+   */
+  private deriveLegacyKey(
     masterSecret: string,
     salt: CryptoJS.lib.WordArray,
     otpToken?: string,
     userId?: string,
     iterations?: number
   ): CryptoJS.lib.WordArray {
-    // Combine all key material
+    // Combine all key material (legacy method)
     let keyMaterial = masterSecret;
     
     if (otpToken) {
