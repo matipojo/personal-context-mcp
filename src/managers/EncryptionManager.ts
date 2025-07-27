@@ -129,16 +129,6 @@ export class EncryptionManager {
           options.userId,
           encryptedData.iterations || this.config.iterations
         );
-      } else {
-        // Legacy format: includes OTP token (may fail for old files)
-        console.warn('⚠️  Attempting to decrypt legacy format with OTP token');
-        key = this.deriveLegacyKey(
-          options.secret,
-          salt,
-          options.otpToken,
-          options.userId,
-          encryptedData.iterations || this.config.iterations
-        );
       }
 
       // Parse IV
@@ -242,36 +232,6 @@ export class EncryptionManager {
     }
 
     // DO NOT include OTP tokens here - they change every 30 seconds!
-
-    // Use PBKDF2 to derive the key
-    return CryptoJS.PBKDF2(keyMaterial, salt, {
-      keySize: this.config.keySize / 32, // Convert bits to words
-      iterations: iterations || this.config.iterations,
-      hasher: CryptoJS.algo.SHA256
-    });
-  }
-
-  /**
-   * LEGACY: Old key derivation method (for backward compatibility)
-   * This will likely fail for files encrypted more than 30 seconds ago
-   */
-  private deriveLegacyKey(
-    masterSecret: string,
-    salt: CryptoJS.lib.WordArray,
-    otpToken?: string,
-    userId?: string,
-    iterations?: number
-  ): CryptoJS.lib.WordArray {
-    // Combine all key material (legacy method)
-    let keyMaterial = masterSecret;
-    
-    if (otpToken) {
-      keyMaterial += otpToken;
-    }
-    
-    if (userId) {
-      keyMaterial += userId;
-    }
 
     // Use PBKDF2 to derive the key
     return CryptoJS.PBKDF2(keyMaterial, salt, {
