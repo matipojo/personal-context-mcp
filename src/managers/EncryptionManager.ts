@@ -121,15 +121,13 @@ export class EncryptionManager {
       const salt = CryptoJS.enc.Hex.parse(encryptedData.salt);
       let key: CryptoJS.lib.WordArray;
 
-      if (encryptedData.encryptionVersion === 2) {
-        // New format: stable key without OTP
-        key = this.deriveStableKey(
-          options.secret,
-          salt,
-          options.userId,
-          encryptedData.iterations || this.config.iterations
-        );
-      }
+      // New format: stable key without OTP
+      key = this.deriveStableKey(
+        options.secret,
+        salt,
+        options.userId,
+        encryptedData.iterations || this.config.iterations
+      );
 
       // Parse IV
       const iv = CryptoJS.enc.Hex.parse(encryptedData.iv);
