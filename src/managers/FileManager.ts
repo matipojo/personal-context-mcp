@@ -191,6 +191,18 @@ export class FileManager {
   }
 
   /**
+   * Get time-based file path for a category and subcategory with timestamp
+   */
+  getTimeBasedFilePath(scope: string, category: string, subcategory?: string, timestamp?: string): string {
+    const timeStr = timestamp || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-mm-ss format
+    const filename = subcategory 
+      ? `${category}-${subcategory}-${timeStr}.md`
+      : `${category}-${timeStr}.md`;
+    
+    return path.join(this.dataDir, scope, filename);
+  }
+
+  /**
    * Find files by category and optionally subcategory
    */
   async findFilesByCategory(

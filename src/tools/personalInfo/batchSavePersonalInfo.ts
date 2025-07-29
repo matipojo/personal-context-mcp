@@ -12,7 +12,8 @@ export const BatchSavePersonalInfoInputSchema = z.object({
     subcategory: z.string().optional(),
     content: z.string().min(1, "Content is required"),
     scope: z.string().min(1, "Scope is required").describe("public, contact, personal, memories, sensitive, or custom scope"),
-    tags: z.array(z.string()).optional()
+    tags: z.array(z.string()).optional(),
+    isTimeBased: z.boolean().optional().describe("If true, adds timestamp to filename for time-based information like meetings, tasks, and memories")
   })).min(1, "At least one item is required")
 });
 
@@ -31,7 +32,10 @@ export const batchSavePersonalInfo: ToolHandler = async (args: unknown, context:
 
   for (const item of input.items) {
     try {
-      const filePath = context.fileManager.getFilePath(item.scope, item.category, item.subcategory);
+      const filePath = item.isTimeBased
+        ? context.fileManager.getTimeBasedFilePath(item.scope, item.category, item.subcategory)
+        : context.fileManager.getFilePath(item.scope, item.category, item.subcategory);
+      
       const now = new Date().toISOString();
 
       // Check if file exists to determine if this is an update
