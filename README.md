@@ -4,11 +4,12 @@ A TypeScript-based Model Context Protocol (MCP) server for managing personal inf
 
 ## Features
 
-🔐 **Scope-Based Permissions**: Control access with granular scopes (public, contact, location, personal, memories, sensitive)  
+🔐 **Scope-Based Permissions**: Control access with granular scopes (public, contact, personal, memories, sensitive)  
 📁 **File-Based Storage**: Store information in organized markdown files with YAML frontmatter  
 🛠️ **Custom Scopes**: Create custom scopes for specialized information categories  
 🔍 **Advanced Search**: Search through memories and experiences with tag and date filtering  
 ⚡ **Real-time Operations**: Get, save, update, and delete personal information instantly  
+🔒 **OTP Authentication**: Secure access with One-Time Password authentication and data encryption  
 🏗️ **Extensible Architecture**: Built with TypeScript for reliability and maintainability
 
 ## Quick Start
@@ -62,7 +63,7 @@ PERSONAL_INFO_MAX_FILE_SIZE=1048576
 PERSONAL_INFO_BACKUP_ENABLED=true
 PERSONAL_INFO_BACKUP_DIR=./backups
 
-# Optional encryption (not implemented yet)
+# Optional encryption (implemented with OTP authentication)
 PERSONAL_INFO_ENCRYPTION_ENABLED=false
 PERSONAL_INFO_ENCRYPTION_KEY=
 ```
@@ -119,16 +120,16 @@ Add this configuration to your Claude Desktop config file:
 
 ### Core Tools
 
-1. **`get_personal_info`** - Retrieve information by category
+1. **`batch_get_personal_info`** - Retrieve multiple categories of information
    ```
-   Parameters: category (required), subcategory (optional)
-   Example: Get phone numbers, addresses, hobbies
+   Parameters: requests (array of category/subcategory objects), has_list_available_personal_info (optional)
+   Example: Get multiple types of information in a single request
    ```
 
-2. **`save_personal_info`** - Save or update information
+2. **`batch_save_personal_info`** - Save multiple pieces of information
    ```
-   Parameters: category, content, scope (required), subcategory, tags (optional)
-   Example: Save contact info, memories, preferences
+   Parameters: items (array of category, content, scope, subcategory, tags)
+   Example: Save multiple types of information efficiently
    ```
 
 3. **`list_available_personal_info`** - List all accessible information
@@ -137,13 +138,19 @@ Add this configuration to your Claude Desktop config file:
    Example: See what information is available in your scopes
    ```
 
-4. **`delete_personal_info`** - Delete specific information
+4. **`update_personal_info`** - Update existing information
+   ```
+   Parameters: category (required), content, scope, subcategory, tags (optional)
+   Example: Update existing contact info or preferences
+   ```
+
+5. **`delete_personal_info`** - Delete specific information
    ```
    Parameters: category (required), subcategory (optional)
    Example: Remove outdated contact information
    ```
 
-5. **`search_personal_memories`** - Search through memories and experiences
+6. **`search_personal_memories`** - Search through memories and experiences
    ```
    Parameters: query (required), tags, date_range (optional)
    Example: Find memories from a specific trip or time period
@@ -151,17 +158,55 @@ Add this configuration to your Claude Desktop config file:
 
 ### Scope Management Tools
 
-6. **`create_personal_scope`** - Create custom scopes
+7. **`create_personal_scope`** - Create custom scopes
    ```
    Parameters: scope_name, description (required), parent_scope, sensitivity_level (optional)
    Example: Create a "work" scope for professional information
    ```
 
-7. **`list_personal_scopes`** - List all available scopes
+8. **`list_personal_scopes`** - List all available scopes
    ```
    Parameters: include_custom_only, show_hierarchy (optional)
    Example: See all built-in and custom scopes with details
    ```
+
+### OTP Authentication Tools
+
+9. **`otp_status`** - Check OTP configuration and session status
+   ```
+   Parameters: random_string (dummy parameter)
+   Example: Verify if OTP is enabled and if session is active
+   ```
+
+10. **`setup_otp`** - Set up One-Time Password authentication
+    ```
+    Parameters: issuer, label, digits, period, qrSize (all optional)
+    Example: Enable OTP protection for personal data
+    ```
+
+11. **`verify_otp`** - Verify an OTP token for access
+    ```
+    Parameters: token (required), useBackupCode, userId (optional)
+    Example: Verify OTP token to access encrypted data
+    ```
+
+12. **`disable_otp`** - Disable OTP authentication
+    ```
+    Parameters: random_string (dummy parameter)
+    Example: Remove OTP protection from personal data
+    ```
+
+13. **`regenerate_backup_codes`** - Generate new backup codes
+    ```
+    Parameters: random_string (dummy parameter)
+    Example: Create new emergency backup codes
+    ```
+
+14. **`otp_debug`** - Debug OTP issues
+    ```
+    Parameters: random_string (dummy parameter)
+    Example: Troubleshoot OTP verification problems
+    ```
 
 ## Usage Examples
 
@@ -170,19 +215,19 @@ Add this configuration to your Claude Desktop config file:
 **Save your phone number:**
 ```
 User: "Save my phone number +1-555-123-4567 as my personal mobile"
-Assistant: Uses save_personal_info(category: "phone", subcategory: "personal-mobile", content: "+1-555-123-4567", scope: "contact")
+Assistant: Uses batch_save_personal_info(items: [{category: "phone", subcategory: "personal-mobile", content: "+1-555-123-4567", scope: "contact"}])
 ```
 
 **Get contact information:**
 ```
 User: "What's my phone number?"
-Assistant: Uses get_personal_info(category: "phone") → Returns all phone numbers in accessible scopes
+Assistant: Uses batch_get_personal_info(requests: [{category: "phone"}]) → Returns all phone numbers in accessible scopes
 ```
 
 **Save a memory:**
 ```
 User: "Save that I went to Japan in March 2024 and loved the cherry blossoms in Kyoto"
-Assistant: Uses save_personal_info(category: "trip", subcategory: "japan-2024", content: "...", scope: "memories", tags: ["travel", "japan", "spring"])
+Assistant: Uses batch_save_personal_info(items: [{category: "trip", subcategory: "japan-2024", content: "...", scope: "memories", tags: ["travel", "japan", "spring"]}])
 ```
 
 ### Advanced Features
@@ -213,8 +258,6 @@ data/
 ├── contact/                       # Contact information
 │   ├── phone-personal-mobile.md
 │   └── email-personal.md
-├── location/                      # Location data
-│   └── address-home.md
 ├── personal/                      # Personal details
 │   ├── hobbies.md
 │   └── preferences.md
@@ -255,8 +298,7 @@ tags: [contact, mobile, primary]
 | Scope | Sensitivity Level | Description | Example Data |
 |-------|-------------------|-------------|--------------|
 | **public** | 1 | Publicly shareable information | Name, avatar, bio |
-| **contact** | 3 | Contact information | Email, phone, social media |
-| **location** | 5 | Location-based data | Address, current location |
+| **contact** | 3 | Contact information | Email, phone, address, social media |
 | **personal** | 6 | Personal details | Age, hobbies, preferences |
 | **memories** | 7 | Personal memories and experiences | Trips, events, relationships |
 | **sensitive** | 9 | Sensitive information | Health data, financial info |
@@ -272,10 +314,23 @@ src/
 │   └── schemas.ts                 # Zod validation schemas
 ├── utils/
 │   └── scopeParser.ts            # Command-line parsing utilities
+├── core/
+│   ├── Context.ts                # Server context and types
+│   ├── Response.ts               # Response utilities
+│   └── Validation.ts             # Validation utilities
 ├── managers/
 │   ├── PermissionManager.ts      # Scope-based access control
-│   └── FileManager.ts            # File operations and management
-└── tools/                        # (Future: Individual tool classes)
+│   ├── FileManager.ts            # File operations and management
+│   ├── EncryptionManager.ts      # Data encryption with AES
+│   └── OTPManager.ts             # OTP authentication management
+├── server/
+│   ├── McpServerFactory.ts       # Server configuration and setup
+│   └── ToolRegistry.ts           # Tool registration system
+└── tools/                        # Individual tool implementations
+    ├── personalInfo/              # Personal information tools
+    ├── memories/                  # Memory search tools
+    ├── scopes/                    # Scope management tools
+    └── otp/                       # OTP authentication tools
 ```
 
 ### Available Scripts
@@ -289,29 +344,23 @@ npm run clean       # Clean build artifacts
 npm run rebuild     # Clean and rebuild
 
 # Testing and Debugging
-npm run inspect      # Launch MCP Inspector with default scopes and ./data directory
-npm run inspect:all  # Launch MCP Inspector with all scopes
-npm run inspect:public # Launch MCP Inspector with public scope only
-npm run inspect:simple # Launch MCP Inspector without specifying data directory (uses default)
-npm run inspect:debug # Launch MCP Inspector with verbose logging
-npm test            # Run tests (when implemented)
+npm run inspect      # Launch MCP Inspector with default scopes and ./data directory (includes OTP encryption)
+npm test            # Run tests (implemented with Jest)
+npm run test:watch  # Run tests in watch mode
 npm run type-check  # Type checking only
 ```
 
 #### MCP Inspector Commands
 
-The `inspect` commands launch the MCP Inspector tool for interactive testing:
+The `inspect` command launches the MCP Inspector tool for interactive testing:
 
-- **`npm run inspect`**: Default command with standard scopes (`public,contact,location,personal,memories`)
-- **`npm run inspect:all`**: Includes all built-in and custom scopes  
-- **`npm run inspect:public`**: Only public scope for minimal testing
-- **`npm run inspect:simple`**: Basic version without specifying data directory (uses server default `./data`)
-- **`npm run inspect:debug`**: Adds verbose logging for troubleshooting
+- **`npm run inspect`**: Default command with standard scopes (`public,contact,personal,memories`) and OTP encryption enabled
 
-All inspect commands automatically:
-- Build the project first
-- Use `--data-dir ./data` command line argument (except for `:simple`)
-- Open a web interface for testing MCP tools
+The inspect command automatically:
+- Builds the project first
+- Uses `--data-dir ./data` command line argument
+- Enables OTP encryption for testing encrypted data features
+- Opens a web interface for testing MCP tools
 
 **Command Line Arguments**: The server now supports `--data-dir` to specify data directory location:
 ```bash
@@ -353,7 +402,10 @@ npm start -- --scope=all  # In another terminal
 🛡️ **Input Validation**: All input is validated using Zod schemas  
 📁 **Path Security**: File operations are contained within the data directory  
 💾 **Atomic Operations**: File writes are atomic to prevent corruption  
-🔍 **Access Logging**: All operations respect scope permissions
+🔍 **Access Logging**: All operations respect scope permissions  
+🔐 **Data Encryption**: AES encryption for sensitive data with OTP authentication  
+🔑 **OTP Protection**: Time-based one-time passwords with backup codes  
+⏰ **Session Management**: Temporary sessions with automatic expiration
 
 ## Troubleshooting
 
@@ -400,10 +452,8 @@ MIT License - see LICENSE file for details.
 
 ## Roadmap
 
-- 🔐 File encryption support
 - 📊 Data analytics and insights
 - 🔄 Data synchronization options
 - 📱 Web interface
-- 🧪 Comprehensive test suite
 - 📈 Performance optimizations
 - 🔌 Plugin system for custom tools 
