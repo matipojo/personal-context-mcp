@@ -42,7 +42,6 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     response += `**Secret Key (manual entry):** \`${result.secret}\`\n\n`;
     response += '## 🆘 Emergency Backup Codes\n\n';
     response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
-    response += '**⚠️ IMPORTANT LLM note:** Add the QR code to the artifacts.\n\n';
     
     result.backupCodes.forEach((code: string, index: number) => {
       response += `${index + 1}. \`${code}\`\n`;
