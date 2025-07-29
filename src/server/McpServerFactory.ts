@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import path from 'path';
+import os from 'os';
 import { ServerContext, OTPSession } from '../core/Context.js';
 import { PermissionManager } from '../managers/PermissionManager.js';
 import { FileManager } from '../managers/FileManager.js';
@@ -34,7 +35,7 @@ export interface ServerInstance {
 export const parseConfiguration = (argv: string[]): ServerConfig => {
   // Parse data directory from command line arguments, fall back to environment variable
   const cmdDataDir = parseDataDirectory(argv);
-  const rawDataDir = cmdDataDir || process.env.PERSONAL_INFO_DATA_DIR || './data';
+  const rawDataDir = cmdDataDir || process.env.PERSONAL_INFO_DATA_DIR || path.join(os.homedir(), '.personal-context-data');
   
   // Resolve relative paths to absolute paths based on current working directory
   const resolvedDataDir = path.isAbsolute(rawDataDir) 
@@ -49,7 +50,7 @@ export const parseConfiguration = (argv: string[]): ServerConfig => {
   }
   
   // Resolve backup directory path as well
-  const rawBackupDir = process.env.PERSONAL_INFO_BACKUP_DIR || './backups';
+  const rawBackupDir = process.env.PERSONAL_INFO_BACKUP_DIR || path.join(os.homedir(), '.personal-context-data', 'backups');
   const resolvedBackupDir = path.isAbsolute(rawBackupDir) 
     ? rawBackupDir 
     : path.resolve(process.cwd(), rawBackupDir);

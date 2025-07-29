@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import os from 'os';
+import path from 'path';
 
 // Tool Names Enum
 export enum ToolNames {
@@ -52,11 +54,11 @@ export const BuiltInScopeSchema = z.object({
 
 // Environment Configuration Schema
 export const EnvironmentConfigSchema = z.object({
-  PERSONAL_INFO_DATA_DIR: z.string().default('./data'),
+  PERSONAL_INFO_DATA_DIR: z.string().default(path.join(os.homedir(), '.personal-context-data')),
   PERSONAL_INFO_DEFAULT_SCOPE: z.string().default('public'),
   PERSONAL_INFO_MAX_FILE_SIZE: z.number().default(1048576), // 1MB
   PERSONAL_INFO_BACKUP_ENABLED: z.boolean().default(true),
-  PERSONAL_INFO_BACKUP_DIR: z.string().default('./backups'),
+  PERSONAL_INFO_BACKUP_DIR: z.string().default(path.join(os.homedir(), '.personal-context-data', 'backups')),
   PERSONAL_INFO_ENCRYPTION_ENABLED: z.boolean().default(false),
   PERSONAL_INFO_ENCRYPTION_KEY: z.string().optional()
 });
