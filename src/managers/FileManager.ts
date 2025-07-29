@@ -26,7 +26,7 @@ export class FileManager {
     await fs.ensureDir(this.dataDir);
     
     // Ensure scope directories exist for built-in scopes
-    const builtInScopes = ['public', 'contact', 'location', 'personal', 'memories', 'sensitive'];
+    const builtInScopes = ['public', 'contact', 'personal', 'memories', 'sensitive'];
     for (const scope of builtInScopes) {
       await fs.ensureDir(path.join(this.dataDir, scope));
     }
@@ -153,7 +153,7 @@ export class FileManager {
         if (await this.isEmptyDirectory(dir)) {
           const scopeName = path.basename(dir);
           // Only remove if it's not a built-in scope directory
-          const builtInScopes = ['public', 'contact', 'location', 'personal', 'memories', 'sensitive'];
+          const builtInScopes = ['public', 'contact', 'personal', 'memories', 'sensitive'];
           if (!builtInScopes.includes(scopeName)) {
             await fs.remove(dir);
             console.error(`Removed empty scope directory: ${scopeName}`);

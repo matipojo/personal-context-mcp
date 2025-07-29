@@ -1,9 +1,7 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ServerContext, OTPSession } from '../core/Context.js';
 
 // Import all tool registration functions
-import { registerGetPersonalInfoTool } from '../tools/personalInfo/getPersonalInfo.js';
-import { registerSavePersonalInfoTool } from '../tools/personalInfo/savePersonalInfo.js';
 import { registerUpdatePersonalInfoTool } from '../tools/personalInfo/updatePersonalInfo.js';
 import { registerListAvailableInfoTool } from '../tools/personalInfo/listAvailableInfo.js';
 import { registerDeletePersonalInfoTool } from '../tools/personalInfo/deletePersonalInfo.js';
@@ -28,21 +26,19 @@ export interface SessionManager {
 // Register all tools with the MCP server
 export const registerTools = (server: McpServer, sessionManager: SessionManager): void => {
   // Register all personal info tools
-  registerGetPersonalInfoTool(server, sessionManager);
-  registerSavePersonalInfoTool(server, sessionManager);
   registerUpdatePersonalInfoTool(server, sessionManager);
   registerListAvailableInfoTool(server, sessionManager);
   registerDeletePersonalInfoTool(server, sessionManager);
   registerBatchGetPersonalInfoTool(server, sessionManager);
   registerBatchSavePersonalInfoTool(server, sessionManager);
-  
+
   // Register memory tools
   registerSearchMemoriesTool(server, sessionManager);
-  
+
   // Register scope tools
   registerCreateScopeTool(server, sessionManager);
   registerListScopesTool(server, sessionManager);
-  
+
   // Register OTP tools
   registerSetupOTPTool(server, sessionManager);
   registerVerifyOTPTool(server, sessionManager);

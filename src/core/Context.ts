@@ -56,7 +56,7 @@ export const getDecryptionOptions = (context: ServerContext): any => {
   if (context.encryptionManager.isEnabled()) {
     // If OTP is not enabled but encryption is, require OTP setup first
     if (!context.otpManager.isEnabled()) {
-      throw new Error('🔒 Encryption is enabled but OTP is not set up. Please use setup_otp tool first to secure your data.');
+      throw new Error('🔒 Encryption is enabled but OTP is not set up. Please ask the user to use setup_otp tool first to secure your data.');
     }
 
     // If no active OTP session, require verification

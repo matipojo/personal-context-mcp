@@ -20,8 +20,7 @@ const buildBuiltInScopesTable = (): string => {
   
   const builtInScopes = [
     { name: 'public', description: 'Publicly shareable information', sensitivity_level: 1, example_data: 'Name, avatar, bio' },
-    { name: 'contact', description: 'Contact information', sensitivity_level: 3, example_data: 'Email, phone, social media' },
-    { name: 'location', description: 'Location-based data', sensitivity_level: 5, example_data: 'Address, current location, places' },
+    { name: 'contact', description: 'Contact information', sensitivity_level: 3, example_data: 'Email, phone, address, social media' },
     { name: 'personal', description: 'Personal details', sensitivity_level: 6, example_data: 'Age, hobbies, preferences' },
     { name: 'memories', description: 'Personal memories and experiences', sensitivity_level: 7, example_data: 'Trips, events, relationships' },
     { name: 'sensitive', description: 'Sensitive information', sensitivity_level: 9, example_data: 'Health data, financial info' }

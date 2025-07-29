@@ -11,7 +11,7 @@ export const BatchSavePersonalInfoInputSchema = z.object({
     category: z.string().min(1, "Category is required"),
     subcategory: z.string().optional(),
     content: z.string().min(1, "Content is required"),
-    scope: z.string().min(1, "Scope is required").describe("public, contact, location, personal, memories, sensitive, or custom scope"),
+    scope: z.string().min(1, "Scope is required").describe("public, contact, personal, memories, sensitive, or custom scope"),
     tags: z.array(z.string()).optional()
   })).min(1, "At least one item is required")
 });

@@ -10,7 +10,6 @@ export const SetupOTPInputSchema = z.object({
   label: z.string().optional().describe("Account label (defaults to 'Personal Data Access')"),
   digits: z.number().min(4).max(8).optional().describe("Number of digits in OTP tokens (default: 6)"),
   period: z.number().min(15).max(300).optional().describe("Token validity period in seconds (default: 30)"),
-  qrSize: z.number().min(64).max(512).optional().describe("QR code size in pixels (default: 128)")
 });
 
 type SetupOTPInput = z.infer<typeof SetupOTPInputSchema>;
@@ -25,7 +24,6 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     if (input.label !== undefined) setupOptions.label = input.label;
     if (input.digits !== undefined) setupOptions.digits = input.digits;
     if (input.period !== undefined) setupOptions.period = input.period;
-    if (input.qrSize !== undefined) setupOptions.qrSize = input.qrSize;
     
     const result = await context.otpManager.setupOTP(setupOptions);
 
@@ -44,6 +42,7 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     response += `**Secret Key (manual entry):** \`${result.secret}\`\n\n`;
     response += '## 🆘 Emergency Backup Codes\n\n';
     response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
+    response += '**⚠️ IMPORTANT LLM note:** Add the QR code to the artifacts.\n\n';
     
     result.backupCodes.forEach((code: string, index: number) => {
       response += `${index + 1}. \`${code}\`\n`;
@@ -58,7 +57,6 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
     response += `- **Digits:** ${input.digits || 6}\n`;
     response += `- **Period:** ${input.period || 30} seconds\n`;
     response += `- **Issuer:** ${input.issuer || 'Personal MCP Server'}\n`;
-    response += `- **QR Code Size:** ${input.qrSize || 128} pixels\n`;
 
     return createTextAndImageResponse(response, base64Data, 'image/png');
   } catch (error) {

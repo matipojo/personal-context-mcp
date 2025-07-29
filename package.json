@@ -10,7 +10,7 @@
     "start": "cross-env TZ=UTC node dist/index.js",
     "clean": "rm -rf dist",
     "rebuild": "npm run clean && npm run build",
-    "inspect": "npm run build && npx @modelcontextprotocol/inspector \"cross-env PERSONAL_INFO_ENCRYPTION_ENABLED=true PERSONAL_INFO_ENCRYPTION_KEY=1234567890 node dist/index.js --scope public,contact,location,personal,memories --data-dir ./data\"",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector \"cross-env PERSONAL_INFO_ENCRYPTION_ENABLED=true PERSONAL_INFO_ENCRYPTION_KEY=1234567890 node dist/index.js --scope public,contact,personal,memories --data-dir ./data\"",
     "test": "jest",
     "test:watch": "jest --watch",
     "type-check": "tsc --noEmit"

@@ -86,13 +86,7 @@ export const BUILT_IN_SCOPES: BuiltInScope[] = [
     name: 'contact',
     description: 'Contact information',
     sensitivity_level: 3,
-    example_data: 'Email, phone, social media'
-  },
-  {
-    name: 'location',
-    description: 'Location-based data',
-    sensitivity_level: 5,
-    example_data: 'Address, current location, places'
+    example_data: 'Email, phone, address, social media'
   },
   {
     name: 'personal',

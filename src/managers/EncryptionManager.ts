@@ -27,7 +27,6 @@ export interface EncryptedData {
 
 export interface DecryptionOptions {
   secret: string;
-  otpToken?: string;
   userId?: string;
 }
 
@@ -60,10 +59,6 @@ export class EncryptionManager {
     return this.config.enabled;
   }
 
-  /**
-   * Encrypt data using a master secret ONLY (no OTP tokens)
-   * OTP is used only for access control, not encryption
-   */
   async encryptData(
     plaintext: string,
     options: DecryptionOptions
@@ -79,8 +74,7 @@ export class EncryptionManager {
       // Generate a random IV
       const iv = CryptoJS.lib.WordArray.random(this.config.ivSize / 8);
 
-      // FIXED: Derive encryption key from ONLY master secret and user ID
-      // OTP tokens are NOT included to prevent permanent data loss
+      // Derive encryption key from ONLY master secret and user ID
       const key = this.deriveStableKey(options.secret, salt, options.userId);
 
       // Encrypt the data
@@ -121,7 +115,6 @@ export class EncryptionManager {
       const salt = CryptoJS.enc.Hex.parse(encryptedData.salt);
       let key: CryptoJS.lib.WordArray;
 
-      // New format: stable key without OTP
       key = this.deriveStableKey(
         options.secret,
         salt,
@@ -211,10 +204,6 @@ export class EncryptionManager {
     }
   }
 
-  /**
-   * NEW: Derive a stable encryption key (without OTP tokens)
-   * This prevents permanent data loss from time-based tokens
-   */
   private deriveStableKey(
     masterSecret: string,
     salt: CryptoJS.lib.WordArray,
@@ -228,8 +217,6 @@ export class EncryptionManager {
     if (userId) {
       keyMaterial += userId;
     }
-
-    // DO NOT include OTP tokens here - they change every 30 seconds!
 
     // Use PBKDF2 to derive the key
     return CryptoJS.PBKDF2(keyMaterial, salt, {

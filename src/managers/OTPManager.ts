@@ -74,8 +74,8 @@ export class OTPManager {
     // Generate backup codes (10 single-use codes)
     const backupCodes = this.generateBackupCodes();
 
-    // Use provided QR code size or default to 128
-    const qrSize = options.qrSize || 128;
+    // Use provided QR code size or default to 512
+    const qrSize = options.qrSize || 256;
 
     // Generate QR code as data URL (PNG image)
     const qrCodeDataURL = await QRCode.toDataURL(qrCodeUri, {

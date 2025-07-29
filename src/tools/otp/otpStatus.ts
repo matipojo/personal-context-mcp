@@ -48,7 +48,7 @@ export const otpStatus: ToolHandler = async (args: unknown, context: ServerConte
     } else {
       response += '❌ **OTP is DISABLED**\n\n';
       response += 'Your personal data is not protected by OTP authentication.\n';
-      response += 'Use the `setup_otp` tool to enable OTP protection.\n';
+      response += 'Please ask the user to use `setup_otp` tool to enable OTP protection.\n';
     }
 
     return createTextResponse(response);
