@@ -65,7 +65,9 @@ export const registerOtpStatusTool = (server: McpServer, sessionManager: any): v
     inputSchema: OTPStatusInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {
-      const currentContext = sessionManager.getCurrentContext();
+      const currentContext = sessionManager.getCurrentContext({
+        shouldValidateOTPSession: false
+      });
       const result = await otpStatus(args, currentContext);
       return result;
     } catch (error) {

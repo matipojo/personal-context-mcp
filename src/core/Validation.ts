@@ -1,15 +1,10 @@
 import { ServerContext } from './Context.js';
 
-// Validation utilities for functional approach
-export const validateOTPEnabled = (context: ServerContext): void => {
-  if (!context.otpManager.isEnabled()) {
-    throw new Error('❌ OTP is not enabled. Use the `setup_otp` tool first.');
-  }
-};
-
 export const validateOTPSession = (context: ServerContext): void => {
-  if (!context.currentOTPSession || Date.now() > context.currentOTPSession.expires) {
-    throw new Error('🔒 OTP verification required. Please use verify_otp tool first to access encrypted data.');
+  if (context.otpManager.isEnabled()) {
+    if (!context.currentOTPSession || Date.now() > context.currentOTPSession.expires) {
+      throw new Error('🔒 OTP verification required. Please use verify_otp tool first to access your data.');
+    }
   }
 };
 

@@ -12,11 +12,6 @@ export const disableOTP: ToolHandler = async (args: unknown, context: ServerCont
   
   try {
     await context.otpManager.disableOTP();
-    context.encryptionManager.disableEncryption();
-    context.fileManager.disableEncryption();
-    
-    // Note: In functional approach, we can't directly mutate currentOTPSession
-    // The caller should handle clearing the session
     
     const response = '✅ OTP Disabled Successfully 🔓\n\n' +
       'OTP authentication and encryption have been disabled.\n' +

@@ -4,12 +4,18 @@ import { FileManager } from '../managers/FileManager.js';
 import { EncryptionManager } from '../managers/EncryptionManager.js';
 import { 
   EnvironmentConfigSchema,
-  type EnvironmentConfig
 } from '../types/schemas.js';
-import { ServerContext, withOTPSession, type OTPSession } from '../core/Context.js';
-import { registerTools, type SessionManager } from './ToolRegistry.js';
+import { ServerContext, type OTPSession } from '../core/Context.js';
+import { registerTools } from './ToolRegistry.js';
 import path from 'path';
 import os from 'os';
+import { validateOTPSession } from '../core/Validation.js';
+
+// Session manager interface
+export interface SessionManager {
+  updateOTPSession: (session: OTPSession | null) => void;
+  getCurrentContext: (options: { shouldValidateOTPSession?: boolean }) => ServerContext;
+}
 
 // Configuration parsing
 interface ServerConfig {
@@ -128,10 +134,16 @@ export const createServerInstance = async (argv: string[]): Promise<{
   // Session state management
   let currentOTPSession: OTPSession | null = null;
   
-  const getCurrentContext = (): ServerContext => ({
-    ...managerContext,
-    currentOTPSession
-  });
+  const getCurrentContext = (config: { shouldValidateOTPSession?: boolean } = { shouldValidateOTPSession: true }): ServerContext => {
+    const context = {
+      ...managerContext,
+      currentOTPSession
+    };
+    if (config.shouldValidateOTPSession) {
+      validateOTPSession(context);
+    }
+    return context;
+  };
 
   const updateOTPSession = (session: OTPSession | null): void => {
     currentOTPSession = session;

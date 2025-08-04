@@ -6,7 +6,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 // Input schema for this tool
-export const SearchMemoriesInputSchema = z.object({
+export const SearchInFilesInputSchema = z.object({
   query: z.string().min(1, "Query is required"),
   tags: z.array(z.string()).optional(),
   date_range: z.object({
@@ -15,10 +15,10 @@ export const SearchMemoriesInputSchema = z.object({
   }).optional()
 });
 
-type SearchMemoriesInput = z.infer<typeof SearchMemoriesInputSchema>;
+type SearchInFilesInput = z.infer<typeof SearchInFilesInputSchema>;
 
-export const searchMemories: ToolHandler = async (args: unknown, context: ServerContext): Promise<ToolResult> => {
-  const input = safeParse<SearchMemoriesInput>(SearchMemoriesInputSchema, args, 'search_personal_memories');
+export const searchInFiles: ToolHandler = async (args: unknown, context: ServerContext): Promise<ToolResult> => {
+  const input = safeParse<SearchInFilesInput>(SearchInFilesInputSchema, args, 'search_in_personal_info_files');
   
   // Get decryption options if OTP is active
   const decryptionOptions = getDecryptionOptions(context);
@@ -39,15 +39,15 @@ export const searchMemories: ToolHandler = async (args: unknown, context: Server
 };
 
 // Direct registration - all metadata inline
-export const registerSearchMemoriesTool = (server: McpServer, sessionManager: any): void => {
-  server.registerTool('search_personal_memories', {
-    title: "Search Personal Memories",
-    description: "Search through memories and experiences",
-    inputSchema: SearchMemoriesInputSchema.shape
+export const registerSearchInFilesTool = (server: McpServer, sessionManager: any): void => {
+  server.registerTool('search_in_personal_info_files', {
+    title: "Search in Personal Information Files",
+    description: "Search through personal information files",
+    inputSchema: SearchInFilesInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {
       const currentContext = sessionManager.getCurrentContext();
-      const result = await searchMemories(args, currentContext);
+      const result = await searchInFiles(args, currentContext);
       return result;
     } catch (error) {
       return {

@@ -1,5 +1,5 @@
-import { ServerContext, ToolHandler, ToolResult, OTPSession, withOTPSession } from '../../core/Context.js';
-import { safeParse, validateOTPEnabled } from '../../core/Validation.js';
+import { ServerContext, ToolHandler, ToolResult, OTPSession } from '../../core/Context.js';
+import { safeParse } from '../../core/Validation.js';
 import { createTextResponse, createOTPNotEnabledResponse } from '../../core/Response.js';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -13,7 +13,7 @@ export const VerifyOTPInputSchema = z.object({
 
 type VerifyOTPInput = z.infer<typeof VerifyOTPInputSchema>;
 
-export const verifyOTP: ToolHandler = async (args: unknown, context: ServerContext): Promise<ToolResult> => {
+export const verifyOTP: ToolHandler = async (args: unknown, context: ServerContext): Promise<ToolResult & { isVerified?: boolean }> => {
   const input = safeParse<VerifyOTPInput>(VerifyOTPInputSchema, args, 'verify_otp');
   
   if (!context.otpManager.isEnabled()) {
@@ -50,9 +50,15 @@ export const verifyOTP: ToolHandler = async (args: unknown, context: ServerConte
     
     response += 'You can now access your encrypted personal information using the regular tools.';
 
-    return createTextResponse(response);
+    return {
+      ...createTextResponse(response),
+      isVerified: true
+    };
   } else {
-    return createTextResponse(`❌ Invalid OTP token. Please check your authenticator app and try again.`);
+    return {
+      ...createTextResponse(`❌ Invalid OTP token. Please check your authenticator app and try again.`),
+      isVerified: false
+    };
   }
 }; 
 
@@ -64,12 +70,13 @@ export const registerVerifyOTPTool = (server: McpServer, sessionManager: any): v
     inputSchema: VerifyOTPInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {
-      const currentContext = sessionManager.getCurrentContext();
+      const currentContext = sessionManager.getCurrentContext({
+        shouldValidateOTPSession: false
+      });
       const result = await verifyOTP(args, currentContext);
 
       // Special handling for successful OTP verification
-      const firstContent = result.content[0];
-      if (firstContent?.type === 'text' && firstContent.text.includes('✅ OTP Token Verified Successfully')) {
+      if (result.isVerified) {
         const sessionDuration = 5 * 60 * 1000; // 5 minutes
         const newSession = {
           token: args.token,
