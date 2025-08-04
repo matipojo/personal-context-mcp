@@ -1,272 +1,100 @@
-# Personal Information MCP Server
+# Personal MCP Server
 
-A TypeScript-based Model Context Protocol (MCP) server for managing personal information with granular scope-based permissions. This server integrates seamlessly with Claude Desktop and other MCP-compatible clients.
+A Model Context Protocol (MCP) server for managing personal information with dynamic topic-based organization, OTP authentication, and encryption support.
 
 ## Features
 
-🔐 **Scope-Based Permissions**: Control access with granular scopes (public, contact, personal, memories, sensitive)  
-📁 **File-Based Storage**: Store information in organized markdown files with YAML frontmatter  
-🛠️ **Custom Scopes**: Create custom scopes for specialized information categories  
-🔍 **Advanced Search**: Search through memories and experiences with tag and date filtering  
-⚡ **Real-time Operations**: Get, save, update, and delete personal information instantly  
-🔒 **OTP Authentication**: Secure access with One-Time Password authentication and data encryption  
-🏗️ **Extensible Architecture**: Built with TypeScript for reliability and maintainability
+- **Topic-Based Organization**: Files organized by category (tasks, meetings, contact, personal, etc.)
+- **Dynamic Categories**: No predefined restrictions - create any category that fits your needs
+- **Rich Metadata**: Support for subcategories, tags, and timestamps
+- **Search & Discovery**: Full-text search across all personal information
+- **Batch Operations**: Efficient bulk operations for saving and retrieving data
+- **Encryption Support**: Optional AES-256 encryption for sensitive data
+- **OTP Authentication**: Time-based OTP for secure access to encrypted data
+- **Backup System**: Automatic backups before data modifications
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 18 or later
-- npm or yarn
-- Claude Desktop (optional, for testing)
-
 ### Installation
 
-1. **Clone or download this repository**
-   ```bash
-   git clone <repository-url>
-   cd personal-mcp
-   ```
+```bash
+npm install
+npm run build
+```
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### Basic Usage
 
-3. **Build the project**
-   ```bash
-   npm run build
-   ```
+Start the server:
 
-4. **Test the server**
-   ```bash
-   npm start -- --scope=public,contact
-   ```
+```bash
+npm start
+```
 
-## Configuration
+Or with custom data directory:
+
+```bash
+npm start -- --data-dir=/path/to/your/data
+```
+
+### Configuration Options
+
+- `--data-dir`: Specify data directory (default: `./data`)
 
 ### Environment Variables
 
-Create a `.env` file (optional) to customize the server:
-
 ```bash
-# Data directory (default: ./data)
+# Data storage
 PERSONAL_INFO_DATA_DIR=./data
-
-# Default scope when none specified (default: public)
-PERSONAL_INFO_DEFAULT_SCOPE=public
-
-# Maximum file size in bytes (default: 1MB)
-PERSONAL_INFO_MAX_FILE_SIZE=1048576
-
-# Enable/disable backups (default: true)
+PERSONAL_INFO_MAX_FILE_SIZE=1048576  # 1MB
 PERSONAL_INFO_BACKUP_ENABLED=true
 PERSONAL_INFO_BACKUP_DIR=./backups
 
-# Optional encryption (implemented with OTP authentication)
+# Security (optional)
 PERSONAL_INFO_ENCRYPTION_ENABLED=false
-PERSONAL_INFO_ENCRYPTION_KEY=
-```
-
-### Scope Configuration
-
-Start the server with specific scope permissions:
-
-```bash
-# Public information only
-npm start -- --scope=public
-
-# Public and contact information
-npm start -- --scope=public,contact
-
-# Multiple specific scopes
-npm start -- --scope=public,contact,personal,memories
-
-# All scopes (including custom ones)
-npm start -- --scope=all
-```
-
-## Claude Desktop Integration
-
-Add this configuration to your Claude Desktop config file:
-
-**Location:**
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-
-**Configuration:**
-```json
-{
-  "mcpServers": {
-    "personal-info": {
-      "command": "node",
-      "args": ["/absolute/path/to/personal-mcp/dist/index.js", "--scope=public,contact"],
-      "env": {
-        "PERSONAL_INFO_DATA_DIR": "./data"
-      }
-    },
-    "personal-info-full": {
-      "command": "node", 
-      "args": ["/absolute/path/to/personal-mcp/dist/index.js", "--scope=all"],
-      "env": {
-        "PERSONAL_INFO_DATA_DIR": "./data"
-      }
-    }
-  }
-}
+PERSONAL_INFO_ENCRYPTION_KEY=""
 ```
 
 ## Available Tools
 
-### Core Tools
+### Core Information Management
 
-1. **`batch_get_personal_info`** - Retrieve multiple categories of information
-   ```
-   Parameters: requests (array of category/subcategory objects), has_list_available_personal_info (optional)
-   Example: Get multiple types of information in a single request
-   ```
+- **`list_available_personal_info`**: List all available information by category
+- **`update_personal_info`**: Update existing personal information
+- **`delete_personal_info`**: Delete specific personal information
+- **`batch_get_personal_info`**: Retrieve multiple categories at once
+- **`batch_save_personal_info`**: Save multiple items efficiently
+- **`search_personal_memories`**: Search through all stored information
 
-2. **`batch_save_personal_info`** - Save multiple pieces of information
-   ```
-   Parameters: items (array of category, content, scope, subcategory, tags)
-   Example: Save multiple types of information efficiently
-   ```
+### Security & Authentication
 
-3. **`list_available_personal_info`** - List all accessible information
-   ```
-   Parameters: scope_filter (optional)
-   Example: See what information is available in your scopes
-   ```
+- **`setup_otp`**: Set up OTP authentication for encryption
+- **`verify_otp`**: Verify OTP token to access encrypted data
+- **`otp_status`**: Check current OTP configuration status
+- **`lock_otp`**: Immediately lock current OTP session and block access
+- **`disable_otp`**: Disable OTP and encryption
 
-4. **`update_personal_info`** - Update existing information
-   ```
-   Parameters: category (required), content, scope, subcategory, tags (optional)
-   Example: Update existing contact info or preferences
-   ```
+## Topic-Based Organization
 
-5. **`delete_personal_info`** - Delete specific information
-   ```
-   Parameters: category (required), subcategory (optional)
-   Example: Remove outdated contact information
-   ```
+### File Structure
 
-6. **`search_personal_memories`** - Search through memories and experiences
-   ```
-   Parameters: query (required), tags, date_range (optional)
-   Example: Find memories from a specific trip or time period
-   ```
-
-### Scope Management Tools
-
-7. **`create_personal_scope`** - Create custom scopes
-   ```
-   Parameters: scope_name, description (required), parent_scope, sensitivity_level (optional)
-   Example: Create a "work" scope for professional information
-   ```
-
-8. **`list_personal_scopes`** - List all available scopes
-   ```
-   Parameters: include_custom_only, show_hierarchy (optional)
-   Example: See all built-in and custom scopes with details
-   ```
-
-### OTP Authentication Tools
-
-9. **`otp_status`** - Check OTP configuration and session status
-   ```
-   Parameters: random_string (dummy parameter)
-   Example: Verify if OTP is enabled and if session is active
-   ```
-
-10. **`setup_otp`** - Set up One-Time Password authentication
-    ```
-    Parameters: issuer, label, digits, period, qrSize (all optional)
-    Example: Enable OTP protection for personal data
-    ```
-
-11. **`verify_otp`** - Verify an OTP token for access
-    ```
-    Parameters: token (required), useBackupCode, userId (optional)
-    Example: Verify OTP token to access encrypted data
-    ```
-
-12. **`disable_otp`** - Disable OTP authentication
-    ```
-    Parameters: random_string (dummy parameter)
-    Example: Remove OTP protection from personal data
-    ```
-
-13. **`regenerate_backup_codes`** - Generate new backup codes
-    ```
-    Parameters: random_string (dummy parameter)
-    Example: Create new emergency backup codes
-    ```
-
-14. **`otp_debug`** - Debug OTP issues
-    ```
-    Parameters: random_string (dummy parameter)
-    Example: Troubleshoot OTP verification problems
-    ```
-
-## Usage Examples
-
-### Basic Information Management
-
-**Save your phone number:**
-```
-User: "Save my phone number +1-555-123-4567 as my personal mobile"
-Assistant: Uses batch_save_personal_info(items: [{category: "phone", subcategory: "personal-mobile", content: "+1-555-123-4567", scope: "contact"}])
-```
-
-**Get contact information:**
-```
-User: "What's my phone number?"
-Assistant: Uses batch_get_personal_info(requests: [{category: "phone"}]) → Returns all phone numbers in accessible scopes
-```
-
-**Save a memory:**
-```
-User: "Save that I went to Japan in March 2024 and loved the cherry blossoms in Kyoto"
-Assistant: Uses batch_save_personal_info(items: [{category: "trip", subcategory: "japan-2024", content: "...", scope: "memories", tags: ["travel", "japan", "spring"]}])
-```
-
-### Advanced Features
-
-**Create a custom scope:**
-```
-User: "Create a scope called 'work' for my professional information"
-Assistant: Uses create_personal_scope(scope_name: "work", description: "Professional information and work-related data")
-```
-
-**Search memories:**
-```
-User: "Find all my travel memories from 2024"
-Assistant: Uses search_personal_memories(query: "travel", tags: ["travel"], date_range: {start: "2024-01-01", end: "2024-12-31"})
-```
-
-## File Structure
-
-The server organizes data in a hierarchical structure:
+Information is organized by topic/category in a simple directory structure:
 
 ```
 data/
-├── .scopes/
-│   └── custom-scopes.json         # Custom scope definitions
-├── public/                        # Public information
-│   ├── name.md
-│   └── bio.md
-├── contact/                       # Contact information
+├── tasks/
+│   ├── project-alpha-planning.md
+│   └── meeting-preparation.md
+├── contact/
 │   ├── phone-personal-mobile.md
-│   └── email-personal.md
-├── personal/                      # Personal details
+│   └── email-work.md
+├── meetings/
+│   ├── team-standup-2024-01-15.md
+│   └── client-review-2024-01-16.md
+├── personal/
 │   ├── hobbies.md
 │   └── preferences.md
-├── memories/                      # Memories and experiences
-│   └── trip-japan-2024.md
-├── sensitive/                     # Sensitive information
-│   └── health-allergies.md
-└── work/                          # Custom scope example
-    └── current-project.md
+└── health/
+    └── allergies.md
 ```
 
 ### File Format
@@ -275,8 +103,7 @@ Each file uses YAML frontmatter with markdown content:
 
 ```markdown
 ---
-scope: contact
-category: phone
+category: contact
 subcategory: personal-mobile
 created: 2024-01-15T10:30:00Z
 updated: 2024-01-15T10:30:00Z
@@ -293,15 +120,91 @@ tags: [contact, mobile, primary]
 - Supports text messages
 ```
 
-## Built-in Scopes
+### Dynamic Categories
 
-| Scope | Sensitivity Level | Description | Example Data |
-|-------|-------------------|-------------|--------------|
-| **public** | 1 | Publicly shareable information | Name, avatar, bio |
-| **contact** | 3 | Contact information | Email, phone, address, social media |
-| **personal** | 6 | Personal details | Age, hobbies, preferences |
-| **memories** | 7 | Personal memories and experiences | Trips, events, relationships |
-| **sensitive** | 9 | Sensitive information | Health data, financial info |
+Categories are created automatically when you save information. Common categories include:
+
+| Category | Description | Example Content |
+|----------|-------------|-----------------|
+| **tasks** | Work and personal tasks | Project plans, todo items, deadlines |
+| **meetings** | Meeting notes and minutes | Standup notes, client calls, retrospectives |
+| **contact** | Contact information | Phone numbers, emails, addresses |
+| **personal** | Personal details | Hobbies, preferences, personal notes |
+| **health** | Health information | Medical records, fitness data, allergies |
+| **work** | Professional information | Projects, colleagues, work notes |
+| **family** | Family information | Family member details, relationships |
+| **travel** | Travel information | Trip plans, itineraries, memories |
+
+## Security Features
+
+### OTP Authentication
+
+For sensitive data, enable OTP authentication:
+
+1. **Setup OTP**: Use `setup_otp` tool to generate QR code and backup codes
+2. **Verify Access**: Use `verify_otp` tool before accessing encrypted data
+3. **Check Status**: Use `otp_status` tool to see current authentication state
+4. **Lock Session**: Use `lock_otp` tool to immediately terminate access when stepping away
+
+### Encryption
+
+- **AES-256 encryption** for file contents
+- **Stable encryption keys** (not time-based)
+- **OTP used for access control**, not key derivation
+- **Backwards compatible** with existing unencrypted files
+
+## Examples
+
+### Saving Personal Information
+
+```json
+{
+  "tool": "batch_save_personal_info",
+  "arguments": {
+    "items": [
+      {
+        "category": "contact",
+        "subcategory": "personal-email",
+        "content": "john.doe@email.com",
+        "tags": ["primary", "personal"]
+      },
+      {
+        "category": "tasks",
+        "subcategory": "project-alpha",
+        "content": "Complete API documentation by Friday",
+        "tags": ["work", "urgent"]
+      }
+    ]
+  }
+}
+```
+
+### Searching Information
+
+```json
+{
+  "tool": "search_personal_memories",
+  "arguments": {
+    "query": "project alpha",
+    "tags": ["work"],
+    "date_range": {
+      "start": "2024-01-01",
+      "end": "2024-01-31"
+    }
+  }
+}
+```
+
+### Listing Available Information
+
+```json
+{
+  "tool": "list_available_personal_info",
+  "arguments": {
+    "category_filter": "contact,tasks"
+  }
+}
+```
 
 ## Development
 
@@ -312,148 +215,68 @@ src/
 ├── index.ts                       # Main server entry point
 ├── types/
 │   └── schemas.ts                 # Zod validation schemas
-├── utils/
-│   └── scopeParser.ts            # Command-line parsing utilities
 ├── core/
 │   ├── Context.ts                # Server context and types
 │   ├── Response.ts               # Response utilities
 │   └── Validation.ts             # Validation utilities
 ├── managers/
-│   ├── PermissionManager.ts      # Scope-based access control
-│   ├── FileManager.ts            # File operations and management
-│   ├── EncryptionManager.ts      # Data encryption with AES
-│   └── OTPManager.ts             # OTP authentication management
+│   ├── FileManager.ts            # File operations and organization
+│   ├── OTPManager.ts             # OTP authentication
+│   └── EncryptionManager.ts      # Encryption/decryption
 ├── server/
-│   ├── McpServerFactory.ts       # Server configuration and setup
-│   └── ToolRegistry.ts           # Tool registration system
-└── tools/                        # Individual tool implementations
-    ├── personalInfo/              # Personal information tools
-    ├── memories/                  # Memory search tools
-    ├── scopes/                    # Scope management tools
-    └── otp/                       # OTP authentication tools
+│   ├── McpServerFactory.ts      # Server initialization
+│   └── ToolRegistry.ts          # Tool registration
+└── tools/
+    ├── personalInfo/             # Personal info management tools
+    ├── memories/                 # Search and memory tools
+    └── otp/                      # Authentication tools
 ```
 
-### Available Scripts
+### Building and Testing
 
 ```bash
-# Build and Development
-npm run build        # Build TypeScript to dist/
-npm run dev          # Watch mode compilation
-npm start           # Start the server
-npm run clean       # Clean build artifacts
-npm run rebuild     # Clean and rebuild
-
-# Testing and Debugging
-npm run inspect      # Launch MCP Inspector with default scopes and ./data directory (includes OTP encryption)
-npm test            # Run tests (implemented with Jest)
-npm run test:watch  # Run tests in watch mode
-npm run type-check  # Type checking only
-```
-
-#### MCP Inspector Commands
-
-The `inspect` command launches the MCP Inspector tool for interactive testing:
-
-- **`npm run inspect`**: Default command with standard scopes (`public,contact,personal,memories`) and OTP encryption enabled
-
-The inspect command automatically:
-- Builds the project first
-- Uses `--data-dir ./data` command line argument
-- Enables OTP encryption for testing encrypted data features
-- Opens a web interface for testing MCP tools
-
-**Command Line Arguments**: The server now supports `--data-dir` to specify data directory location:
-```bash
-# Absolute path
-node dist/index.js --scope public,contact --data-dir /path/to/data
-
-# Relative path (resolved from current working directory)
-node dist/index.js --scope public,contact --data-dir ./data
-node dist/index.js --scope public,contact --data-dir ../shared-data
-
-# Space-separated format also supported
-node dist/index.js --scope public,contact --data-dir /path/to/data
-```
-
-**Path Resolution**: 
-- Relative paths (starting with `./` or `../`) are resolved relative to the current working directory
-- Absolute paths are used as-is
-- The server logs the resolved path during startup for debugging
-
-After running any inspect command, open the provided URL in your browser to test the server interactively.
-
-### Building from Source
-
-```bash
-# Development setup
-git clone <repository-url>
-cd personal-mcp
+# Install dependencies
 npm install
+
+# Build TypeScript
 npm run build
 
-# Run with debugging
-npm run dev         # In one terminal (watch mode)
-npm start -- --scope=all  # In another terminal
+# Run the server
+npm start
+
+# Run with custom data directory
+npm start -- --data-dir=./test-data
 ```
 
-## Security Considerations
+## Migration from Scope-Based System
 
-🔒 **Scope Isolation**: Each scope operates independently with no data leakage  
-🛡️ **Input Validation**: All input is validated using Zod schemas  
-📁 **Path Security**: File operations are contained within the data directory  
-💾 **Atomic Operations**: File writes are atomic to prevent corruption  
-🔍 **Access Logging**: All operations respect scope permissions  
-🔐 **Data Encryption**: AES encryption for sensitive data with OTP authentication  
-🔑 **OTP Protection**: Time-based one-time passwords with backup codes  
-⏰ **Session Management**: Temporary sessions with automatic expiration
+If migrating from an older version that used scope-based organization:
 
-## Troubleshooting
+1. **File Location**: Move files from `data/scope/` to `data/category/`
+2. **Frontmatter**: Remove `scope` field from YAML frontmatter
+3. **Categories**: Map old scopes to new categories as needed
+4. **Access Control**: All data is now accessible (no scope-based restrictions)
 
-### Common Issues
+Example migration:
+- `data/contact/phone.md` → `data/contact/phone.md` (same location)
+- `data/personal/hobbies.md` → `data/personal/hobbies.md` (same location)
+- Remove `scope: contact` from frontmatter
 
-**"Invalid scope" errors:**
-- Check that custom scopes are properly created with `create_personal_scope`
-- Verify scope names match exactly (case-sensitive)
-- Ensure scope is included in startup arguments
+## License
 
-**File not found errors:**
-- Check data directory permissions
-- Verify file paths don't contain invalid characters
-- Ensure directory structure exists
-
-**Permission denied:**
-- Verify the requested scope is in your allowed scopes
-- Check that the scope exists (built-in or custom)
-- Restart server after creating new custom scopes
-
-**Build errors:**
-- Ensure Node.js 18+ is installed
-- Delete `node_modules` and run `npm install` again
-- Check for TypeScript compilation errors with `npm run type-check`
-
-### Debug Mode
-
-Run with additional logging:
-```bash
-DEBUG=* npm start -- --scope=all
-```
+MIT License - see LICENSE file for details.
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests (if applicable)
+4. Add tests if applicable
 5. Submit a pull request
 
-## License
+## Support
 
-MIT License - see LICENSE file for details.
-
-## Roadmap
-
-- 📊 Data analytics and insights
-- 🔄 Data synchronization options
-- 📱 Web interface
-- 📈 Performance optimizations
-- 🔌 Plugin system for custom tools 
+For issues and questions:
+- Create an issue on GitHub
+- Check existing documentation
+- Review example usage patterns 

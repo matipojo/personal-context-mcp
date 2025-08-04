@@ -2,20 +2,6 @@ import { z } from 'zod';
 import os from 'os';
 import path from 'path';
 
-// Tool Names Enum
-export enum ToolNames {
-  UPDATE_PERSONAL_INFO = 'update_personal_info',
-  LIST_AVAILABLE_PERSONAL_INFO = 'list_available_personal_info',
-  DELETE_PERSONAL_INFO = 'delete_personal_info',
-  SEARCH_PERSONAL_MEMORIES = 'search_personal_memories',
-  BATCH_GET_PERSONAL_INFO = 'batch_get_personal_info',
-  BATCH_SAVE_PERSONAL_INFO = 'batch_save_personal_info',
-  SETUP_OTP = 'setup_otp',
-  VERIFY_OTP = 'verify_otp',
-  DISABLE_OTP = 'disable_otp',
-  OTP_STATUS = 'otp_status'
-}
-
 // Personal Information File Schema
 export const PersonalInfoFileSchema = z.object({
   frontmatter: z.object({
