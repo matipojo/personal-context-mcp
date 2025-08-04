@@ -1,16 +1,15 @@
 import { ServerContext, ToolHandler, ToolResult } from '../../core/Context.js';
-import { safeParse, validateAndPrepareScope } from '../../core/Validation.js';
-import { createSuccessResponse } from '../../core/Response.js';
+import { safeParse } from '../../core/Validation.js';
+import { createTextResponse } from '../../core/Response.js';
 import { getDecryptionOptions } from '../../core/Context.js';
-import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 // Input schema for this tool
 export const UpdatePersonalInfoInputSchema = z.object({
   category: z.string().min(1, "Category is required"),
   subcategory: z.string().optional(),
   content: z.string().optional(),
-  scope: z.string().optional(),
   tags: z.array(z.string()).optional()
 });
 
@@ -22,9 +21,8 @@ export const updatePersonalInfo: ToolHandler = async (args: unknown, context: Se
   // Get encryption options if OTP is active (this will throw if OTP verification is required)
   const encryptionOptions = getDecryptionOptions(context);
 
-  // First, find the existing file to get current scope if not provided
+  // First, find the existing file to update
   const files = await context.fileManager.findFilesByCategory(
-    context.permissionManager.getAllowedScopes(),
     input.category,
     input.subcategory,
     encryptionOptions
@@ -36,19 +34,7 @@ export const updatePersonalInfo: ToolHandler = async (args: unknown, context: Se
 
   // Use the first matching file
   const existingFile = files[0]!; // Safe because we checked files.length > 0
-  const targetScope = input.scope || existingFile.frontmatter.scope;
-
-  // Check if we have permission to write to this scope
-  if (!context.permissionManager.isAccessAllowed(targetScope)) {
-    throw new Error(`Access denied: scope '${targetScope}' is not allowed`);
-  }
-
-  // Validate the scope exists
-  if (!context.permissionManager.isValidScope(targetScope)) {
-    throw new Error(`Invalid scope: '${targetScope}'`);
-  }
-
-  const filePath = context.fileManager.getFilePath(targetScope, input.category, input.subcategory);
+  const filePath = context.fileManager.getFilePath(input.category, input.subcategory);
   const now = new Date().toISOString();
 
   // Create backup if enabled
@@ -58,28 +44,26 @@ export const updatePersonalInfo: ToolHandler = async (args: unknown, context: Se
 
   const fileData = {
     frontmatter: {
-      scope: targetScope,
       category: input.category,
-      subcategory: input.subcategory || existingFile.frontmatter.subcategory,
+      subcategory: input.subcategory,
       created: existingFile.frontmatter.created,
       updated: now,
       tags: input.tags || existingFile.frontmatter.tags
     },
     content: input.content || existingFile.content,
-    filePath: ''
+    filePath: existingFile.filePath
   };
 
   await context.fileManager.writeMarkdownFile(filePath, fileData, encryptionOptions);
 
-  const entity = `${input.category}${input.subcategory ? ` (${input.subcategory})` : ''}`;
-  return createSuccessResponse('updated', entity, targetScope);
+  return createTextResponse(`✅ Successfully updated ${input.category}${input.subcategory ? ` (${input.subcategory})` : ''}.`);
 };
 
 // Direct registration - all metadata inline
 export const registerUpdatePersonalInfoTool = (server: McpServer, sessionManager: any): void => {
   server.registerTool('update_personal_info', {
     title: "Update Personal Information",
-    description: "Update existing personal information. Only updates specified fields, leaving others unchanged.",
+    description: "Update existing personal information",
     inputSchema: UpdatePersonalInfoInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {

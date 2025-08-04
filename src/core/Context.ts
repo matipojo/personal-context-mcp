@@ -1,4 +1,3 @@
-import { PermissionManager } from '../managers/PermissionManager.js';
 import { FileManager } from '../managers/FileManager.js';
 import { OTPManager } from '../managers/OTPManager.js';
 import { EncryptionManager } from '../managers/EncryptionManager.js';
@@ -6,7 +5,6 @@ import { EnvironmentConfigSchema } from '../types/schemas.js';
 
 export interface ServerContext {
   readonly config: ReturnType<typeof EnvironmentConfigSchema.parse>;
-  readonly permissionManager: PermissionManager;
   readonly fileManager: FileManager;
   readonly otpManager: OTPManager;
   readonly encryptionManager: EncryptionManager;

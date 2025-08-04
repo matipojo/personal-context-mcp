@@ -24,7 +24,6 @@ export const searchMemories: ToolHandler = async (args: unknown, context: Server
   const decryptionOptions = getDecryptionOptions(context);
   
   const files = await context.fileManager.searchFiles(
-    context.permissionManager.getAllowedScopes(),
     input.query,
     input.tags,
     input.date_range,

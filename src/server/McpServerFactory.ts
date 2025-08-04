@@ -1,101 +1,95 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { OTPManager } from '../managers/OTPManager.js';
+import { FileManager } from '../managers/FileManager.js';
+import { EncryptionManager } from '../managers/EncryptionManager.js';
+import { 
+  EnvironmentConfigSchema,
+  type EnvironmentConfig
+} from '../types/schemas.js';
+import { ServerContext, withOTPSession, type OTPSession } from '../core/Context.js';
+import { registerTools, type SessionManager } from './ToolRegistry.js';
 import path from 'path';
 import os from 'os';
-import { ServerContext, OTPSession } from '../core/Context.js';
-import { PermissionManager } from '../managers/PermissionManager.js';
-import { FileManager } from '../managers/FileManager.js';
-import { OTPManager } from '../managers/OTPManager.js';
-import { EncryptionManager } from '../managers/EncryptionManager.js';
-import { EnvironmentConfigSchema } from '../types/schemas.js';
-import { resolveScopeConfig, parseDataDirectory } from '../utils/scopeParser.js';
-import { registerTools, SessionManager } from './ToolRegistry.js';
 
-// Configuration type
-export interface ServerConfig {
+// Configuration parsing
+interface ServerConfig {
   dataDir: string;
+  maxFileSize: number;
+  backupEnabled: boolean;
   backupDir: string;
   encryptionEnabled: boolean;
-  encryptionKey: string | undefined;
-  backupEnabled: boolean;
-  maxFileSize: number | undefined;
-  defaultScope: string | undefined;
+  encryptionKey: string;
 }
 
-// Server instance with context and session management
-export interface ServerInstance {
-  server: McpServer;
-  context: ServerContext;
-  start: () => Promise<void>;
-  updateOTPSession: (session: OTPSession | null) => void;
-  getCurrentContext: () => ServerContext;
-}
-
-// Parse configuration from environment and command line
-export const parseConfiguration = (argv: string[]): ServerConfig => {
-  // Parse data directory from command line arguments, fall back to environment variable
-  const cmdDataDir = parseDataDirectory(argv);
-  const rawDataDir = cmdDataDir || process.env.PERSONAL_INFO_DATA_DIR || path.join(os.homedir(), '.personal-context-data');
+export const parseConfiguration = 
+  (argv: string[]): ServerConfig => {
+  // Parse data directory from command line or environment
+  const dataDirFromArgs = parseDataDirectory(argv);
+  const rawDataDir = dataDirFromArgs || process.env.PERSONAL_INFO_DATA_DIR || path.join(os.homedir(), '.personal-context-data');
   
   // Resolve relative paths to absolute paths based on current working directory
-  const resolvedDataDir = path.isAbsolute(rawDataDir) 
+  const dataDir = path.isAbsolute(rawDataDir) 
     ? rawDataDir 
     : path.resolve(process.cwd(), rawDataDir);
   
-  // Log path resolution for debugging
-  if (rawDataDir !== resolvedDataDir) {
-    console.error(`📁 Data directory resolved: "${rawDataDir}" → "${resolvedDataDir}"`);
-  } else {
-    console.error(`📁 Data directory (absolute): "${resolvedDataDir}"`);
-  }
-  
   // Resolve backup directory path as well
   const rawBackupDir = process.env.PERSONAL_INFO_BACKUP_DIR || path.join(os.homedir(), '.personal-context-data', 'backups');
-  const resolvedBackupDir = path.isAbsolute(rawBackupDir) 
+  const backupDir = path.isAbsolute(rawBackupDir) 
     ? rawBackupDir 
     : path.resolve(process.cwd(), rawBackupDir);
 
   return {
-    dataDir: resolvedDataDir,
-    backupDir: resolvedBackupDir,
+    dataDir,
+    maxFileSize: parseInt(process.env.PERSONAL_INFO_MAX_FILE_SIZE || '1048576'),
+    backupEnabled: process.env.PERSONAL_INFO_BACKUP_ENABLED !== 'false',
+    backupDir,
     encryptionEnabled: process.env.PERSONAL_INFO_ENCRYPTION_ENABLED === 'true',
-    encryptionKey: process.env.PERSONAL_INFO_ENCRYPTION_KEY,
-    backupEnabled: process.env.PERSONAL_INFO_BACKUP_ENABLED === 'true',
-    maxFileSize: process.env.PERSONAL_INFO_MAX_FILE_SIZE ? 
-      parseInt(process.env.PERSONAL_INFO_MAX_FILE_SIZE) : undefined,
-    defaultScope: process.env.PERSONAL_INFO_DEFAULT_SCOPE
+    encryptionKey: process.env.PERSONAL_INFO_ENCRYPTION_KEY || ''
   };
 };
 
+// Helper function to parse data directory from command line arguments
+function parseDataDirectory(args: string[]): string | undefined {
+  // Look for --data-dir=value format first
+  let dataDirArgIndex = args.findIndex(arg => arg.startsWith('--data-dir='));
+  
+  if (dataDirArgIndex !== -1) {
+    // Handle --data-dir=value format
+    const dataDirArg = args[dataDirArgIndex];
+    if (!dataDirArg) {
+      return undefined;
+    }
+    return dataDirArg.split('=')[1];
+  } else {
+    // Look for --data-dir value format (space-separated)
+    dataDirArgIndex = args.findIndex(arg => arg === '--data-dir');
+    if (dataDirArgIndex !== -1 && dataDirArgIndex < args.length - 1) {
+      return args[dataDirArgIndex + 1];
+    }
+  }
+  
+  return undefined;
+}
+
 // Initialize managers
-const initializeManagers = async (config: ServerConfig, argv: string[]): Promise<Omit<ServerContext, 'currentOTPSession'>> => {
-  // Parse scope configuration
-  const scopeConfig = resolveScopeConfig(argv, {});
-  console.error(`📋 Allowed scopes: ${scopeConfig.allowedScopes.join(', ')}`);
+const initializeManagers = async (config: ServerConfig): Promise<Omit<ServerContext, 'currentOTPSession'>> => {
+  // Log path resolution for debugging
+  console.error(`📁 Data directory: ${config.dataDir}`);
+  console.error(`💾 Backup directory: ${config.backupDir}`);
 
   // Initialize managers
-  const permissionManager = new PermissionManager(scopeConfig, config.dataDir);
   const encryptionManager = new EncryptionManager({
     enabled: config.encryptionEnabled
   });
   const fileManager = new FileManager(config.dataDir, config.maxFileSize, encryptionManager);
   const otpManager = new OTPManager(config.dataDir);
 
-  await permissionManager.initialize();
   await fileManager.initialize();
   await otpManager.initialize();
-
-  // Re-resolve scope config now that custom scopes are loaded
-  const finalScopeConfig = resolveScopeConfig(argv, permissionManager.getCustomScopes());
-  
-  // Update permission manager with final config
-  const finalPermissionManager = new PermissionManager(finalScopeConfig, config.dataDir);
-  await finalPermissionManager.initialize();
 
   // Parse environment configuration
   const envConfig = EnvironmentConfigSchema.parse({
     PERSONAL_INFO_DATA_DIR: config.dataDir,
-    PERSONAL_INFO_DEFAULT_SCOPE: config.defaultScope,
     PERSONAL_INFO_MAX_FILE_SIZE: config.maxFileSize,
     PERSONAL_INFO_BACKUP_ENABLED: config.backupEnabled,
     PERSONAL_INFO_BACKUP_DIR: config.backupDir,
@@ -104,12 +98,9 @@ const initializeManagers = async (config: ServerConfig, argv: string[]): Promise
   });
 
   console.error(`✅ Managers initialized successfully!`);
-  console.error(`📁 Data directory: ${config.dataDir}`);
-  console.error(`🔒 Final allowed scopes: ${finalPermissionManager.getAllowedScopes().join(', ')}`);
 
   return {
     config: envConfig,
-    permissionManager: finalPermissionManager,
     fileManager,
     otpManager,
     encryptionManager
@@ -117,50 +108,42 @@ const initializeManagers = async (config: ServerConfig, argv: string[]): Promise
 };
 
 // Create server instance
-export const createServerInstance = async (argv: string[]): Promise<ServerInstance> => {
-  console.error('🔧 Initializing Personal Information MCP Server...');
-  
+export const createServerInstance = async (argv: string[]): Promise<{ 
+  server: McpServer; 
+  updateOTPSession: (session: OTPSession | null) => void;
+}> => {
   const config = parseConfiguration(argv);
-  const managers = await initializeManagers(config, argv);
+  const managerContext = await initializeManagers(config);
   
+  // Create server
   const server = new McpServer({
-    name: 'personal-info-mcp-server',
-    version: '1.0.0',
+    name: 'personal-mcp',
+    version: '1.0.0'
+  }, {
+    capabilities: {
+      tools: {}
+    }
   });
 
-  // Create mutable context for session management
-  let currentContext: ServerContext = {
-    ...managers,
-    currentOTPSession: null
+  // Session state management
+  let currentOTPSession: OTPSession | null = null;
+  
+  const getCurrentContext = (): ServerContext => ({
+    ...managerContext,
+    currentOTPSession
+  });
+
+  const updateOTPSession = (session: OTPSession | null): void => {
+    currentOTPSession = session;
   };
 
-  // Create session manager implementation
   const sessionManager: SessionManager = {
-    updateOTPSession: (session: OTPSession | null) => {
-      console.error(`🔄 Updating OTP session: ${session ? 'active' : 'cleared'}`);
-      currentContext = {
-        ...currentContext,
-        currentOTPSession: session
-      };
-    },
-    getCurrentContext: () => currentContext
+    getCurrentContext,
+    updateOTPSession
   };
 
-  // Register tools with session manager
+  // Register tools
   registerTools(server, sessionManager);
 
-  // Create server instance with session management
-  const serverInstance: ServerInstance = {
-    server,
-    context: currentContext,
-    start: async () => {
-      const transport = new StdioServerTransport();
-      await server.connect(transport);
-      console.error('🚀 Personal Information MCP Server is running');
-    },
-    updateOTPSession: sessionManager.updateOTPSession,
-    getCurrentContext: sessionManager.getCurrentContext
-  };
-
-  return serverInstance;
+  return { server, updateOTPSession };
 }; 

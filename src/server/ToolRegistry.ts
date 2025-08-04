@@ -8,14 +8,11 @@ import { registerDeletePersonalInfoTool } from '../tools/personalInfo/deletePers
 import { registerBatchGetPersonalInfoTool } from '../tools/personalInfo/batchGetPersonalInfo.js';
 import { registerBatchSavePersonalInfoTool } from '../tools/personalInfo/batchSavePersonalInfo.js';
 import { registerSearchMemoriesTool } from '../tools/memories/searchMemories.js';
-import { registerCreateScopeTool } from '../tools/scopes/createScope.js';
-import { registerListScopesTool } from '../tools/scopes/listScopes.js';
 import { registerSetupOTPTool } from '../tools/otp/setupOTP.js';
 import { registerVerifyOTPTool } from '../tools/otp/verifyOTP.js';
 import { registerOtpStatusTool } from '../tools/otp/otpStatus.js';
 import { registerDisableOTPTool } from '../tools/otp/disableOTP.js';
-import { registerRegenerateBackupCodesTool } from '../tools/otp/regenerateBackupCodes.js';
-import { registerOtpDebugTool } from '../tools/otp/otpDebug.js';
+import { registerLockOTPTool } from '../tools/otp/lockOTP.js';
 
 // Session manager interface
 export interface SessionManager {
@@ -35,17 +32,12 @@ export const registerTools = (server: McpServer, sessionManager: SessionManager)
   // Register memory tools
   registerSearchMemoriesTool(server, sessionManager);
 
-  // Register scope tools
-  registerCreateScopeTool(server, sessionManager);
-  registerListScopesTool(server, sessionManager);
-
   // Register OTP tools
   registerSetupOTPTool(server, sessionManager);
   registerVerifyOTPTool(server, sessionManager);
   registerOtpStatusTool(server, sessionManager);
   registerDisableOTPTool(server, sessionManager);
-  registerRegenerateBackupCodesTool(server, sessionManager);
-  registerOtpDebugTool(server, sessionManager);
+  registerLockOTPTool(server, sessionManager);
 
-  console.error(`✅ Registered 16/16 tools successfully with distributed registration pattern!`);
+  console.error(`✅ Tools registered successfully!`);
 }; 

@@ -10,18 +10,16 @@ export const createTextResponse = (text: string): ToolResult => ({
   ]
 });
 
-export const createSuccessResponse = (action: string, entity: string, scope?: string): ToolResult => {
-  const scopeText = scope ? ` in scope '${scope}'` : '';
-  return createTextResponse(`✅ Successfully ${action} ${entity}${scopeText}.`);
+export const createSuccessResponse = (action: string, entity: string): ToolResult => {
+  return createTextResponse(`✅ Successfully ${action} ${entity}.`);
 };
 
 export const createErrorResponse = (message: string): ToolResult => {
   return createTextResponse(`❌ ${message}`);
 };
 
-export const createNotFoundResponse = (entity: string, scope?: string): ToolResult => {
-  const scopeText = scope ? ' in accessible scopes' : '';
-  return createTextResponse(`No ${entity} information found${scopeText}.`);
+export const createNotFoundResponse = (entity: string): ToolResult => {
+  return createTextResponse(`No ${entity} information found.`);
 };
 
 export const createOTPRequiredResponse = (): ToolResult => {
@@ -76,18 +74,18 @@ export const formatFileInfo = (file: any): string => {
     result += ` - ${file.frontmatter.subcategory}`;
   }
   result += `\n\n${file.content}\n\n`;
-  result += `*Scope: ${file.frontmatter.scope}, Tags: ${file.frontmatter.tags.join(', ')}, Updated: ${file.frontmatter.updated}*\n\n---\n\n`;
+  result += `*Tags: ${file.frontmatter.tags.join(', ')}, Updated: ${file.frontmatter.updated}*\n\n---\n\n`;
   return result;
 };
 
-// Helper for building lists of available information
-export const formatAvailableInfo = (filesByScope: Record<string, any[]>): string => {
+// Helper for building lists of available information by category
+export const formatAvailableInfo = (filesByCategory: Record<string, any[]>): string => {
   let result = '# Available Personal Information\n\n';
   
-  for (const [scope, scopeFiles] of Object.entries(filesByScope)) {
-    result += `## ${scope.charAt(0).toUpperCase() + scope.slice(1)} Scope\n\n`;
+  for (const [category, categoryFiles] of Object.entries(filesByCategory)) {
+    result += `## ${category.charAt(0).toUpperCase() + category.slice(1)}\n\n`;
     
-    for (const file of scopeFiles) {
+    for (const file of categoryFiles) {
       result += `- **${file.frontmatter.category}`;
       if (file.frontmatter.subcategory) {
         result += ` (${file.frontmatter.subcategory})`;

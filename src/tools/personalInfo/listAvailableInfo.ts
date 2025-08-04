@@ -2,12 +2,12 @@ import { ServerContext, ToolHandler, ToolResult } from '../../core/Context.js';
 import { safeParse } from '../../core/Validation.js';
 import { createTextResponse, formatAvailableInfo } from '../../core/Response.js';
 import { getDecryptionOptions } from '../../core/Context.js';
-import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 // Input schema for this tool
 export const ListAvailableInfoInputSchema = z.object({
-  scope_filter: z.string().optional()
+  category_filter: z.string().optional()
 });
 
 type ListAvailableInfoInput = z.infer<typeof ListAvailableInfoInputSchema>;
@@ -18,28 +18,29 @@ export const listAvailableInfo: ToolHandler = async (args: unknown, context: Ser
   // Get decryption options if OTP is active
   const decryptionOptions = getDecryptionOptions(context);
   
-  let allowedScopes = context.permissionManager.getAllowedScopes();
-  if (input.scope_filter) {
-    const filterScopes = input.scope_filter.split(',').map(s => s.trim());
-    allowedScopes = allowedScopes.filter(scope => filterScopes.includes(scope));
+  const files = await context.fileManager.listFiles(decryptionOptions);
+
+  // Apply category filter if provided
+  let filteredFiles = files;
+  if (input.category_filter) {
+    const filterCategories = input.category_filter.split(',').map(s => s.trim());
+    filteredFiles = files.filter(file => filterCategories.includes(file.frontmatter.category));
   }
 
-  const files = await context.fileManager.listFiles(allowedScopes, decryptionOptions);
-
-  if (files.length === 0) {
-    return createTextResponse('No personal information found in accessible scopes.');
+  if (filteredFiles.length === 0) {
+    return createTextResponse('No personal information found.');
   }
 
-  // Group files by scope
-  const filesByScope: Record<string, typeof files> = {};
-  for (const file of files) {
-    if (!filesByScope[file.frontmatter.scope]) {
-      filesByScope[file.frontmatter.scope] = [];
+  // Group files by category
+  const filesByCategory: Record<string, typeof files> = {};
+  for (const file of filteredFiles) {
+    if (!filesByCategory[file.frontmatter.category]) {
+      filesByCategory[file.frontmatter.category] = [];
     }
-    filesByScope[file.frontmatter.scope]!.push(file);
+    filesByCategory[file.frontmatter.category]!.push(file);
   }
 
-  const result = formatAvailableInfo(filesByScope);
+  const result = formatAvailableInfo(filesByCategory);
   return createTextResponse(result);
 }; 
 
@@ -47,7 +48,7 @@ export const listAvailableInfo: ToolHandler = async (args: unknown, context: Ser
 export const registerListAvailableInfoTool = (server: McpServer, sessionManager: any): void => {
   server.registerTool('list_available_personal_info', {
     title: "List Available Personal Information",
-    description: "List all available personal information within current scope. use it when the user needs personal information, for example, when the user asks writing a message, or on shopping and the address is needed, .",
+    description: "List all available personal information within current permissions",
     inputSchema: ListAvailableInfoInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {

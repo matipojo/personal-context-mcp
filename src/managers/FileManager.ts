@@ -24,13 +24,6 @@ export class FileManager {
    */
   async initialize(): Promise<void> {
     await fs.ensureDir(this.dataDir);
-    
-    // Ensure scope directories exist for built-in scopes
-    const builtInScopes = ['public', 'contact', 'personal', 'memories', 'sensitive'];
-    for (const scope of builtInScopes) {
-      await fs.ensureDir(path.join(this.dataDir, scope));
-    }
-
     console.error(`File manager initialized with data directory: ${this.dataDir}`);
   }
 
@@ -108,32 +101,26 @@ export class FileManager {
   }
 
   /**
-   * List all files within allowed scopes
+   * List all files in the data directory
    */
-  async listFiles(allowedScopes: string[], decryptionOptions?: DecryptionOptions): Promise<PersonalInfoFile[]> {
+  async listFiles(decryptionOptions?: DecryptionOptions): Promise<PersonalInfoFile[]> {
     const files: PersonalInfoFile[] = [];
+    
+    try {
+      // Use glob to find all .md files recursively
+      const pattern = path.join(this.dataDir, '**', '*.md').replace(/\\/g, '/');
+      const filePaths = await glob(pattern);
 
-    for (const scope of allowedScopes) {
-      const scopeDir = path.join(this.dataDir, scope);
-      
-      if (await fs.pathExists(scopeDir)) {
+      for (const filePath of filePaths) {
         try {
-          // Normalize path for glob pattern (use forward slashes for cross-platform compatibility)
-          const pattern = path.join(scopeDir, '*.md').replace(/\\/g, '/');
-          const filePaths = await glob(pattern);
-
-          for (const filePath of filePaths) {
-            try {
-              const file = await this.readMarkdownFile(filePath, decryptionOptions);
-              files.push(file);
-            } catch (error) {
-              console.warn(`Skipping invalid file ${filePath}:`, error);
-            }
-          }
+          const file = await this.readMarkdownFile(filePath, decryptionOptions);
+          files.push(file);
         } catch (error) {
-          console.warn(`Failed to list files in scope ${scope}:`, error);
+          console.warn(`Skipping invalid file ${filePath}:`, error);
         }
       }
+    } catch (error) {
+      console.warn(`Failed to list files:`, error);
     }
 
     return files;
@@ -148,16 +135,11 @@ export class FileManager {
         await fs.remove(filePath);
         console.error(`Deleted file: ${path.relative(this.dataDir, filePath)}`);
 
-        // Clean up empty directory if it's a scope directory
+        // Clean up empty directory
         const dir = path.dirname(filePath);
-        if (await this.isEmptyDirectory(dir)) {
-          const scopeName = path.basename(dir);
-          // Only remove if it's not a built-in scope directory
-          const builtInScopes = ['public', 'contact', 'personal', 'memories', 'sensitive'];
-          if (!builtInScopes.includes(scopeName)) {
-            await fs.remove(dir);
-            console.error(`Removed empty scope directory: ${scopeName}`);
-          }
+        if (await this.isEmptyDirectory(dir) && dir !== this.dataDir) {
+          await fs.remove(dir);
+          console.error(`Removed empty directory: ${path.relative(this.dataDir, dir)}`);
         }
       }
     } catch (error) {
@@ -173,7 +155,7 @@ export class FileManager {
   }
 
   /**
-   * Ensure directory exists for a scope
+   * Ensure directory exists for a category
    */
   async ensureDirectoryExists(dirPath: string): Promise<void> {
     await fs.ensureDir(dirPath);
@@ -182,36 +164,35 @@ export class FileManager {
   /**
    * Get file path for a category and subcategory
    */
-  getFilePath(scope: string, category: string, subcategory?: string): string {
+  getFilePath(category: string, subcategory?: string): string {
     const filename = subcategory 
       ? `${category}-${subcategory}.md`
       : `${category}.md`;
     
-    return path.join(this.dataDir, scope, filename);
+    return path.join(this.dataDir, category, filename);
   }
 
   /**
    * Get time-based file path for a category and subcategory with timestamp
    */
-  getTimeBasedFilePath(scope: string, category: string, subcategory?: string, timestamp?: string): string {
+  getTimeBasedFilePath(category: string, subcategory?: string, timestamp?: string): string {
     const timeStr = timestamp || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-mm-ss format
     const filename = subcategory 
       ? `${category}-${subcategory}-${timeStr}.md`
       : `${category}-${timeStr}.md`;
     
-    return path.join(this.dataDir, scope, filename);
+    return path.join(this.dataDir, category, filename);
   }
 
   /**
    * Find files by category and optionally subcategory
    */
   async findFilesByCategory(
-    allowedScopes: string[], 
     category: string, 
     subcategory?: string,
     decryptionOptions?: DecryptionOptions
   ): Promise<PersonalInfoFile[]> {
-    const allFiles = await this.listFiles(allowedScopes, decryptionOptions);
+    const allFiles = await this.listFiles(decryptionOptions);
     
     return allFiles.filter(file => {
       const matchesCategory = file.frontmatter.category === category;
@@ -224,13 +205,12 @@ export class FileManager {
    * Search files by content and metadata
    */
   async searchFiles(
-    allowedScopes: string[], 
     query: string, 
     tags?: string[],
     dateRange?: { start: string; end: string },
     decryptionOptions?: DecryptionOptions
   ): Promise<PersonalInfoFile[]> {
-    const allFiles = await this.listFiles(allowedScopes, decryptionOptions);
+    const allFiles = await this.listFiles(decryptionOptions);
     const queryLower = query.toLowerCase();
 
     return allFiles.filter(file => {
@@ -254,6 +234,20 @@ export class FileManager {
 
       return contentMatch && tagMatch && dateMatch;
     });
+  }
+
+  /**
+   * Get all available categories from existing files
+   */
+  async getAvailableCategories(decryptionOptions?: DecryptionOptions): Promise<string[]> {
+    const allFiles = await this.listFiles(decryptionOptions);
+    const categories = new Set<string>();
+    
+    for (const file of allFiles) {
+      categories.add(file.frontmatter.category);
+    }
+    
+    return Array.from(categories).sort();
   }
 
   /**
@@ -373,7 +367,6 @@ export class FileManager {
       
       // Ensure required fields exist and have defaults
       const processedFrontmatter = {
-        scope: frontmatter.scope || 'public',
         category: frontmatter.category || 'unknown',
         subcategory: frontmatter.subcategory,
         created: frontmatter.created || new Date().toISOString(),

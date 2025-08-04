@@ -1,9 +1,9 @@
 import { ServerContext, ToolHandler, ToolResult } from '../../core/Context.js';
-import { safeParse, validateBatchOperation } from '../../core/Validation.js';
-import { formatBatchResults, createTextResponse } from '../../core/Response.js';
+import { safeParse } from '../../core/Validation.js';
+import { createTextResponse, formatBatchResults } from '../../core/Response.js';
 import { getDecryptionOptions } from '../../core/Context.js';
-import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
 
 // Input schema for this tool
 export const BatchSavePersonalInfoInputSchema = z.object({
@@ -11,9 +11,8 @@ export const BatchSavePersonalInfoInputSchema = z.object({
     category: z.string().min(1, "Category is required"),
     subcategory: z.string().optional(),
     content: z.string().min(1, "Content is required"),
-    scope: z.string().min(1, "Scope is required").describe("public, contact, personal, memories, sensitive, or custom scope"),
-    tags: z.array(z.string()).optional(),
-    isTimeBased: z.boolean().optional().describe("If true, adds timestamp to filename for time-based information like meetings, tasks, and memories")
+    isTimeBased: z.boolean().optional(),
+    tags: z.array(z.string()).optional()
   })).min(1, "At least one item is required")
 });
 
@@ -22,40 +21,39 @@ type BatchSavePersonalInfoInput = z.infer<typeof BatchSavePersonalInfoInputSchem
 export const batchSavePersonalInfo: ToolHandler = async (args: unknown, context: ServerContext): Promise<ToolResult> => {
   const input = safeParse<BatchSavePersonalInfoInput>(BatchSavePersonalInfoInputSchema, args, 'batch_save_personal_info');
 
-  // Get decryption/encryption options if OTP is active
+  // Get encryption options if OTP is active
   const encryptionOptions = getDecryptionOptions(context);
 
-  // Validate batch operation
-  validateBatchOperation(input.items, context);
-
-  const results: Array<{ category: string; subcategory?: string; success: boolean; action: 'created' | 'updated'; error?: string }> = [];
+  const results: Array<{ success: boolean; category: string; subcategory?: string; action?: string; error?: string }> = [];
 
   for (const item of input.items) {
     try {
-      const filePath = item.isTimeBased
-        ? context.fileManager.getTimeBasedFilePath(item.scope, item.category, item.subcategory)
-        : context.fileManager.getFilePath(item.scope, item.category, item.subcategory);
-      
       const now = new Date().toISOString();
+      
+      // Check if file already exists
+      const existingFiles = await context.fileManager.findFilesByCategory(
+        item.category,
+        item.subcategory,
+        encryptionOptions
+      );
 
-      // Check if file exists to determine if this is an update
-      const isUpdate = await context.fileManager.fileExists(filePath);
+      const isUpdate = existingFiles.length > 0;
+      const action = isUpdate ? 'updated' : 'created';
 
-      // Create backup if updating existing file
+      const filePath = context.fileManager.getFilePath(item.category, item.subcategory);
+
+      // Create backup if enabled and file exists
       if (isUpdate && context.config.PERSONAL_INFO_BACKUP_ENABLED) {
         await context.fileManager.createBackup(filePath, context.config.PERSONAL_INFO_BACKUP_DIR);
       }
 
-      const existingFile = isUpdate ? await context.fileManager.readMarkdownFile(filePath, encryptionOptions) : null;
-
       const fileData = {
         frontmatter: {
-          scope: item.scope,
           category: item.category,
           subcategory: item.subcategory,
-          created: existingFile?.frontmatter.created || now,
+          created: isUpdate ? existingFiles[0]!.frontmatter.created : now,
           updated: now,
-          tags: item.tags || existingFile?.frontmatter.tags || []
+          tags: item.tags || []
         },
         content: item.content,
         filePath: ''
@@ -64,20 +62,18 @@ export const batchSavePersonalInfo: ToolHandler = async (args: unknown, context:
       await context.fileManager.writeMarkdownFile(filePath, fileData, encryptionOptions);
 
       const successResult: any = {
-        category: item.category,
         success: true,
-        action: isUpdate ? 'updated' : 'created'
+        category: item.category,
+        action
       };
       if (item.subcategory) {
         successResult.subcategory = item.subcategory;
       }
       results.push(successResult);
-
     } catch (error) {
       const errorResult: any = {
-        category: item.category,
         success: false,
-        action: 'created' as const,
+        category: item.category,
         error: error instanceof Error ? error.message : String(error)
       };
       if (item.subcategory) {
@@ -87,8 +83,8 @@ export const batchSavePersonalInfo: ToolHandler = async (args: unknown, context:
     }
   }
 
-  const resultText = formatBatchResults('Batch Save Results', results);
-  return createTextResponse(resultText);
+  const result = formatBatchResults('Batch Save Personal Information', results);
+  return createTextResponse(result);
 };
 
 // Direct registration - all metadata inline

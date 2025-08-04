@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServerInstance } from './server/McpServerFactory.js';
 
 // Main function using functional composition
 async function main(): Promise<void> {
   try {
+    console.error('🔧 Initializing Personal Information MCP Server...');
+    
     // Create server instance with functional approach
-    const serverInstance = await createServerInstance(process.argv);
+    const { server, updateOTPSession } = await createServerInstance(process.argv);
     
-    // Start the server
-    await serverInstance.start();
+    // Connect to stdio transport
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
     
-    // Note: OTP session management would be handled by updating the context
-    // when OTP verification succeeds. This can be done by:
-    // 1. Modifying the verifyOTP handler to return session info
-    // 2. Having a session management layer that updates the context
-    // 3. Using the updateOTPSession method on serverInstance
+    console.error('🚀 Personal Information MCP Server is running');
     
   } catch (error) {
     console.error('❌ Failed to start server:', error);
