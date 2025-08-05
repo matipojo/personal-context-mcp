@@ -65,6 +65,7 @@ PERSONAL_INFO_ENCRYPTION_KEY=""
     }
   }
 }
+```
 
 ## Available Tools
 
