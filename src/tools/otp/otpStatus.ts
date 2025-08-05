@@ -61,7 +61,7 @@ export const otpStatus: ToolHandler = async (args: unknown, context: ServerConte
 export const registerOtpStatusTool = (server: McpServer, sessionManager: any): void => {
   server.registerTool('otp_status', {
     title: "OTP Status",
-    description: "Check the current OTP configuration status and whether OTP verification is required. Don't continue to use any other tools until you get the status of the OTP.",
+    description: "Check the current OTP configuration status and whether OTP verification is required.",
     inputSchema: OTPStatusInputSchema.shape
   }, async (args: { [x: string]: any }, extra: any) => {
     try {

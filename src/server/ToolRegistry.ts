@@ -6,7 +6,6 @@ import { registerListAvailableInfoTool } from '../tools/personalInfo/listAvailab
 import { registerDeletePersonalInfoTool } from '../tools/personalInfo/deletePersonalInfo.js';
 import { registerBatchGetPersonalInfoTool } from '../tools/personalInfo/batchGetPersonalInfo.js';
 import { registerBatchSavePersonalInfoTool } from '../tools/personalInfo/batchSavePersonalInfo.js';
-import { registerSearchInFilesTool } from '../tools/personalInfo/searchInFiles.js';
 import { registerSetupOTPTool } from '../tools/otp/setupOTP.js';
 import { registerVerifyOTPTool } from '../tools/otp/verifyOTP.js';
 import { registerOtpStatusTool } from '../tools/otp/otpStatus.js';
@@ -22,7 +21,6 @@ export const registerTools = (server: McpServer, sessionManager: SessionManager)
   registerDeletePersonalInfoTool(server, sessionManager);
   registerBatchGetPersonalInfoTool(server, sessionManager);
   registerBatchSavePersonalInfoTool(server, sessionManager);
-  registerSearchInFilesTool(server, sessionManager);
 
   // Register OTP tools
   registerSetupOTPTool(server, sessionManager);

@@ -7,7 +7,6 @@ A Model Context Protocol (MCP) server for managing personal information with dyn
 - **Topic-Based Organization**: Files organized by category (tasks, meetings, contact, personal, etc.)
 - **Dynamic Categories**: No predefined restrictions - create any category that fits your needs
 - **Rich Metadata**: Support for subcategories, tags, and timestamps
-- **Search & Discovery**: Full-text search across all personal information
 - **Batch Operations**: Efficient bulk operations for saving and retrieving data
 - **Encryption Support**: Optional AES-256 encryption for sensitive data
 - **OTP Authentication**: Time-based OTP for secure access to encrypted data
@@ -22,23 +21,20 @@ npm install
 npm run build
 ```
 
-### Basic Usage
-
-Start the server:
-
-```bash
-npm start
+### Basic Usage - Save to `.personal-context-data` in user home directory
+```json
+   {
+  "mcpServers": {
+    "personal-info": {
+      "command": "node",
+      "args": [
+        "<path/to/personal-mcp>/dist/index.js"
+      ]
+    }
+  }
+}
 ```
 
-Or with custom data directory:
-
-```bash
-npm start -- --data-dir=/path/to/your/data
-```
-
-### Configuration Options
-
-- `--data-dir`: Specify data directory (default: `./data`)
 
 ### Environment Variables
 
@@ -54,6 +50,22 @@ PERSONAL_INFO_ENCRYPTION_ENABLED=false
 PERSONAL_INFO_ENCRYPTION_KEY=""
 ```
 
+### Configuration Example
+```json
+   {
+  "mcpServers": {
+    "shared-memory-info": {
+      "command": "node",
+      "args": [
+        "<path/to/personal-mcp>/dist/index.js"
+      ]
+      "env": {
+        "PERSONAL_INFO_DATA_DIR": "<path/to/shared/folder>/shared-mcp-memory",
+      }
+    }
+  }
+}
+
 ## Available Tools
 
 ### Core Information Management
@@ -63,7 +75,6 @@ PERSONAL_INFO_ENCRYPTION_KEY=""
 - **`delete_personal_info`**: Delete specific personal information
 - **`batch_get_personal_info`**: Retrieve multiple categories at once
 - **`batch_save_personal_info`**: Save multiple items efficiently
-- **`search_personal_memories`**: Search through all stored information
 
 ### Security & Authentication
 
@@ -75,9 +86,9 @@ PERSONAL_INFO_ENCRYPTION_KEY=""
 
 ## Topic-Based Organization
 
-### File Structure
+### File Structure example (auto generated)
 
-Information is organized by topic/category in a simple directory structure:
+Information is organized by topic/category in a simple directory structure for example:
 
 ```
 data/
@@ -120,21 +131,6 @@ tags: [contact, mobile, primary]
 - Supports text messages
 ```
 
-### Dynamic Categories
-
-Categories are created automatically when you save information. Common categories include:
-
-| Category | Description | Example Content |
-|----------|-------------|-----------------|
-| **tasks** | Work and personal tasks | Project plans, todo items, deadlines |
-| **meetings** | Meeting notes and minutes | Standup notes, client calls, retrospectives |
-| **contact** | Contact information | Phone numbers, emails, addresses |
-| **personal** | Personal details | Hobbies, preferences, personal notes |
-| **health** | Health information | Medical records, fitness data, allergies |
-| **work** | Professional information | Projects, colleagues, work notes |
-| **family** | Family information | Family member details, relationships |
-| **travel** | Travel information | Trip plans, itineraries, memories |
-
 ## Security Features
 
 ### OTP Authentication
@@ -151,86 +147,10 @@ For sensitive data, enable OTP authentication:
 - **AES-256 encryption** for file contents
 - **Stable encryption keys** (not time-based)
 - **OTP used for access control**, not key derivation
-- **Backwards compatible** with existing unencrypted files
 
-## Examples
-
-### Saving Personal Information
-
-```json
-{
-  "tool": "batch_save_personal_info",
-  "arguments": {
-    "items": [
-      {
-        "category": "contact",
-        "subcategory": "personal-email",
-        "content": "john.doe@email.com",
-        "tags": ["primary", "personal"]
-      },
-      {
-        "category": "tasks",
-        "subcategory": "project-alpha",
-        "content": "Complete API documentation by Friday",
-        "tags": ["work", "urgent"]
-      }
-    ]
-  }
-}
-```
-
-### Searching Information
-
-```json
-{
-  "tool": "search_personal_memories",
-  "arguments": {
-    "query": "project alpha",
-    "tags": ["work"],
-    "date_range": {
-      "start": "2024-01-01",
-      "end": "2024-01-31"
-    }
-  }
-}
-```
-
-### Listing Available Information
-
-```json
-{
-  "tool": "list_available_personal_info",
-  "arguments": {
-    "category_filter": "contact,tasks"
-  }
-}
-```
 
 ## Development
 
-### Project Structure
-
-```
-src/
-├── index.ts                       # Main server entry point
-├── types/
-│   └── schemas.ts                 # Zod validation schemas
-├── core/
-│   ├── Context.ts                # Server context and types
-│   ├── Response.ts               # Response utilities
-│   └── Validation.ts             # Validation utilities
-├── managers/
-│   ├── FileManager.ts            # File operations and organization
-│   ├── OTPManager.ts             # OTP authentication
-│   └── EncryptionManager.ts      # Encryption/decryption
-├── server/
-│   ├── McpServerFactory.ts      # Server initialization
-│   └── ToolRegistry.ts          # Tool registration
-└── tools/
-    ├── personalInfo/             # Personal info management tools
-    ├── memories/                 # Search and memory tools
-    └── otp/                      # Authentication tools
-```
 
 ### Building and Testing
 
@@ -238,45 +158,14 @@ src/
 # Install dependencies
 npm install
 
-# Build TypeScript
-npm run build
-
-# Run the server
-npm start
-
-# Run with custom data directory
-npm start -- --data-dir=./test-data
+# Build TypeScript and watch for changes
+npm run dev
 ```
-
-## Migration from Scope-Based System
-
-If migrating from an older version that used scope-based organization:
-
-1. **File Location**: Move files from `data/scope/` to `data/category/`
-2. **Frontmatter**: Remove `scope` field from YAML frontmatter
-3. **Categories**: Map old scopes to new categories as needed
-4. **Access Control**: All data is now accessible (no scope-based restrictions)
-
-Example migration:
-- `data/contact/phone.md` → `data/contact/phone.md` (same location)
-- `data/personal/hobbies.md` → `data/personal/hobbies.md` (same location)
-- Remove `scope: contact` from frontmatter
 
 ## License
 
 MIT License - see LICENSE file for details.
 
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## Support
-
-For issues and questions:
-- Create an issue on GitHub
-- Check existing documentation
-- Review example usage patterns 
+## Vibe Coding Disclaimer ⚠️
+The code is written by AI, so it may not be the best code.
+Use it at your own risk.
