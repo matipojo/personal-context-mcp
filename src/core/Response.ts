@@ -1,4 +1,5 @@
 import { ToolResult } from './Context.js';
+import type { OtpSetupAppPayload } from './otpAppPayload.js';
 
 // Pure functions for building responses
 export const createTextResponse = (text: string): ToolResult => ({
@@ -55,6 +56,19 @@ export const createTextAndImageResponse = (text: string, base64Data: string, mim
     }
   ]
 });
+
+/** Pattern for MCP App tools: concise text for the model plus structured data for the embedded UI. */
+export const createMcpAppStructuredResult = (
+  summaryText: string,
+  structuredContent: Record<string, unknown>,
+): ToolResult => ({
+  content: [{ type: 'text' as const, text: summaryText }],
+  structuredContent,
+});
+
+/** MCP App hosts render {@link OtpSetupAppPayload} in the embedded UI instead of inline tool images. */
+export const createOtpSetupMcpAppResponse = (payload: OtpSetupAppPayload): ToolResult =>
+  createMcpAppStructuredResult(payload.summary, { ...payload });
 
 // Helper for building markdown-formatted responses
 export const createMarkdownResponse = (title: string, sections: Array<{ title: string; content: string }>): ToolResult => {

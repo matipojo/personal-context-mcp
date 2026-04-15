@@ -1,8 +1,12 @@
 import { ServerContext, ToolHandler, ToolResult } from '../../core/Context.js';
+import { OTP_SETUP_APP_RESOURCE_URI } from '../../core/mcpAppUris.js';
+import { OTP_SETUP_APP_ID } from '../../core/otpAppPayload.js';
 import { safeParse } from '../../core/Validation.js';
-import { createTextAndImageResponse, createTextResponse } from '../../core/Response.js';
+import { createOtpSetupMcpAppResponse, createTextResponse } from '../../core/Response.js';
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { registerAppTool } from '@modelcontextprotocol/ext-apps/server';
+import type { SessionManager } from '../../server/McpServerFactory.js';
 
 // Input schema for this tool
 export const SetupOTPInputSchema = z.object({
@@ -32,57 +36,61 @@ export const setupOTP: ToolHandler = async (args: unknown, context: ServerContex
       context.fileManager.enableEncryption();
     }
 
-    // Extract base64 data from the data URL
     const base64Data = result.qrCodeDataURL.replace(/^data:image\/png;base64,/, '');
+    const issuer = input.issuer ?? 'Personal MCP Server';
+    const label = input.label ?? 'Personal Data Access';
+    const digits = input.digits ?? 6;
+    const period = input.period ?? 30;
 
-    let response = '# OTP Setup Complete! 🔐\n\n';
-    response += 'Your One-Time Password authentication has been successfully configured.\n\n';
-    response += '## 📱 Scan the QR Code\n\n';
-    response += 'Scan the QR code below with your authenticator app (Google Authenticator, Authy, 1Password, etc.)\n\n';
-    response += `**Secret Key (manual entry):** \`${result.secret}\`\n\n`;
-    response += '## 🆘 Emergency Backup Codes\n\n';
-    response += '**⚠️ IMPORTANT:** Save these backup codes in a secure location. Each can only be used once.\n\n';
-    
-    result.backupCodes.forEach((code: string, index: number) => {
-      response += `${index + 1}. \`${code}\`\n`;
+    const summary =
+      `OTP is configured (${issuer} / ${label}). The QR code, secret, and backup codes are shown in the MCP App panel. ` +
+      'Scan the QR with an authenticator app, store the backup codes safely, then call verify_otp to test.';
+
+    return createOtpSetupMcpAppResponse({
+      app: OTP_SETUP_APP_ID,
+      v: 1,
+      summary,
+      secret: result.secret,
+      backupCodes: result.backupCodes,
+      qrPngBase64: base64Data,
+      issuer,
+      label,
+      digits,
+      period,
+      resourceUri: OTP_SETUP_APP_RESOURCE_URI,
     });
-    
-    response += '\n## 🔑 Next Steps\n\n';
-    response += '1. Scan the QR code with your authenticator app\n';
-    response += '2. Use the `verify_otp` tool with a token from your app to test\n';
-    response += '3. Once verified, your personal data will be encrypted with OTP-enhanced security\n';
-    response += '4. You\'ll need to verify an OTP token before accessing encrypted information\n\n';
-    response += '## ⚙️ Configuration\n\n';
-    response += `- **Digits:** ${input.digits || 6}\n`;
-    response += `- **Period:** ${input.period || 30} seconds\n`;
-    response += `- **Issuer:** ${input.issuer || 'Personal MCP Server'}\n`;
-
-    return createTextAndImageResponse(response, base64Data, 'image/png');
   } catch (error) {
     return createTextResponse(`❌ Failed to set up OTP: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
-// Direct registration - all metadata inline
-export const registerSetupOTPTool = (server: McpServer, sessionManager: any): void => {
-  server.registerTool('setup_otp', {
-    title: "Setup OTP",
-    description: "Set up One-Time Password (OTP) authentication for accessing encrypted personal data. Returns QR code image and backup codes.",
-    inputSchema: SetupOTPInputSchema.shape
-  }, async (args: { [x: string]: any }, extra: any) => {
-    try {
-      const currentContext = sessionManager.getCurrentContext();
-      const result = await setupOTP(args, currentContext);
-      return result;
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `❌ Error in setup_otp: ${error instanceof Error ? error.message : String(error)}`
-          }
-        ]
-      };
-    }
-  });
+export const registerSetupOTPTool = (server: McpServer, sessionManager: SessionManager): void => {
+  registerAppTool(
+    server,
+    'setup_otp',
+    {
+      title: 'Setup OTP',
+      description:
+        'Set up One-Time Password (OTP) for encrypted personal data. On MCP App-capable clients, the QR code and backup codes appear in the app panel; otherwise use the structured result.',
+      inputSchema: SetupOTPInputSchema.shape,
+      _meta: {
+        ui: { resourceUri: OTP_SETUP_APP_RESOURCE_URI },
+      },
+    },
+    async (args: Record<string, unknown>) => {
+      try {
+        const currentContext = sessionManager.getCurrentContext();
+        return await setupOTP(args, currentContext);
+      } catch (error) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: `❌ Error in setup_otp: ${error instanceof Error ? error.message : String(error)}`,
+            },
+          ],
+        };
+      }
+    },
+  );
 }; 

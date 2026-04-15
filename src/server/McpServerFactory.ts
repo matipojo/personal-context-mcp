@@ -7,6 +7,7 @@ import {
 } from '../types/schemas.js';
 import { ServerContext, type OTPSession } from '../core/Context.js';
 import { registerTools } from './ToolRegistry.js';
+import { registerOtpSetupMcpAppResource } from './otpSetupMcpApp.js';
 import path from 'path';
 import os from 'os';
 import { validateOTPSession } from '../core/Validation.js';
@@ -14,7 +15,7 @@ import { validateOTPSession } from '../core/Validation.js';
 // Session manager interface
 export interface SessionManager {
   updateOTPSession: (session: OTPSession | null) => void;
-  getCurrentContext: (options: { shouldValidateOTPSession?: boolean }) => ServerContext;
+  getCurrentContext: (options?: { shouldValidateOTPSession?: boolean }) => ServerContext;
 }
 
 // Configuration parsing
@@ -127,7 +128,8 @@ export const createServerInstance = async (argv: string[]): Promise<{
     version: '1.0.0'
   }, {
     capabilities: {
-      tools: {}
+      tools: {},
+      resources: {},
     }
   });
 
@@ -153,6 +155,8 @@ export const createServerInstance = async (argv: string[]): Promise<{
     getCurrentContext,
     updateOTPSession
   };
+
+  registerOtpSetupMcpAppResource(server);
 
   // Register tools
   registerTools(server, sessionManager);

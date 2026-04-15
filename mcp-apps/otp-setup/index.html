@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OTP setup</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        line-height: 1.45;
+      }
+      body {
+        margin: 0;
+        padding: 12px 14px 20px;
+        max-width: 42rem;
+      }
+      h1 {
+        font-size: 1.1rem;
+        margin: 0 0 10px;
+        font-weight: 600;
+      }
+      .muted {
+        opacity: 0.85;
+        font-size: 0.9rem;
+        margin-bottom: 14px;
+      }
+      #qr-wrap {
+        display: flex;
+        justify-content: center;
+        margin: 12px 0 16px;
+        padding: 12px;
+        background: var(--color-background-secondary, rgba(127, 127, 127, 0.12));
+        border-radius: 8px;
+      }
+      #qr {
+        width: min(260px, 100%);
+        height: auto;
+        image-rendering: pixelated;
+      }
+      .secret {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.85rem;
+        word-break: break-all;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: var(--color-background-tertiary, rgba(127, 127, 127, 0.08));
+        margin: 8px 0 14px;
+      }
+      .codes {
+        display: grid;
+        gap: 6px;
+        margin-top: 8px;
+      }
+      .codes code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 0.85rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: var(--color-background-tertiary, rgba(127, 127, 127, 0.08));
+      }
+      h2 {
+        font-size: 0.95rem;
+        margin: 16px 0 6px;
+        font-weight: 600;
+      }
+      .backup-codes-details {
+        margin: 16px 0 0;
+      }
+      .backup-codes-details summary {
+        font-size: 0.95rem;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+      }
+      .meta {
+        font-size: 0.85rem;
+        margin-top: 14px;
+        opacity: 0.9;
+      }
+      .warn {
+        font-size: 0.88rem;
+        margin: 10px 0;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(200, 120, 0, 0.35);
+        background: rgba(200, 120, 0, 0.1);
+      }
+      #placeholder {
+        opacity: 0.75;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <p id="placeholder">Loading…</p>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
