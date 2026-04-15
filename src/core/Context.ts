@@ -1,3 +1,4 @@
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { FileManager } from '../managers/FileManager.js';
 import { OTPManager } from '../managers/OTPManager.js';
 import { EncryptionManager } from '../managers/EncryptionManager.js';
@@ -16,17 +17,8 @@ export interface OTPSession {
   readonly expires: number;
 }
 
-export interface ToolResult {
-  [x: string]: unknown;
-  content: Array<{
-    type: 'text';
-    text: string;
-  } | {
-    type: 'image';
-    data: string;
-    mimeType: string;
-  }>;
-}
+/** Tool handler results match MCP `CallToolResult` (text, images, structured content, etc.). */
+export type ToolResult = CallToolResult;
 
 export type ToolHandler<T = unknown> = (
   args: T,
